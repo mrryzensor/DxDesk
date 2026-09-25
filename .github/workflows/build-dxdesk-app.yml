@@ -90,7 +90,7 @@ jobs:
           cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
           dart pub global activate ffigen 8.0.2
 
-      - name: Generate Dart FFI Bridge
+      - name: Generate Dart FFI Bridge and Freezed Models
         shell: pwsh
         run: |
           $env:PATH = "C:\Program Files\LLVM\bin;" + $env:PATH
@@ -105,24 +105,32 @@ jobs:
           Copy-Item -Path "pubspec.yaml" -Destination "..\pubspec.yaml" -Force
           Copy-Item -Path "pubspec.lock" -Destination "..\pubspec.lock" -Force
 
-          # 3. Generate bridge from client/flutter (standard RustDesk workflow)
+          # 3. Generate bridge from client/flutter
           Write-Host "Running flutter_rust_bridge_codegen from client/flutter..."
-          flutter_rust_bridge_codegen --rust-input ../src/flutter_ffi.rs --dart-output lib/generated_bridge.dart --rust-output ../src/bridge_generated.rs --skip-deps-check --no-build-runner
+          flutter_rust_bridge_codegen --rust-input ../src/flutter_ffi.rs --dart-output lib/generated_bridge.dart --rust-output ../src/bridge_generated.rs --skip-deps-check
 
           # 4. Fallback from client root if needed
           if (-not (Test-Path "lib/generated_bridge.dart")) {
               Write-Host "Running fallback codegen from client root..."
               cd ..
-              flutter_rust_bridge_codegen --rust-input src/flutter_ffi.rs --dart-output flutter/lib/generated_bridge.dart --rust-output src/bridge_generated.rs --skip-deps-check --no-build-runner
+              flutter_rust_bridge_codegen --rust-input src/flutter_ffi.rs --dart-output flutter/lib/generated_bridge.dart --rust-output src/bridge_generated.rs --skip-deps-check
               cd flutter
           }
 
-          if (Test-Path "lib/generated_bridge.dart") {
-              Write-Host "SUCCESS: lib/generated_bridge.dart generated successfully!"
-          } else {
-              Write-Error "ERROR: lib/generated_bridge.dart was not created!"
+          # 5. Explicitly run build_runner to guarantee generated_bridge.freezed.dart is produced
+          Write-Host "Running build_runner to guarantee all Freezed models exist..."
+          dart run build_runner build --delete-conflicting-outputs
+
+          # 6. Strict validation of all bridge artifacts
+          if (-not (Test-Path "lib/generated_bridge.dart")) {
+              Write-Error "CRITICAL: lib/generated_bridge.dart was not created!"
               exit 1
           }
+          if (-not (Test-Path "lib/generated_bridge.freezed.dart")) {
+              Write-Error "CRITICAL: lib/generated_bridge.freezed.dart was not created!"
+              exit 1
+          }
+          Write-Host "SUCCESS: Both generated_bridge.dart and generated_bridge.freezed.dart exist and are ready!"
 
       - name: Build Rust Core Library
         shell: pwsh
