@@ -8,10 +8,18 @@ server/data/
 
 # Binarios y compilaciones
 dist/
+dist-all-platforms/
 build/
 *.exe
 client-packager/tools/*.exe
 client-packager/output/
+
+# Rust y Flutter build artifacts
+target/
+**/target/
+**/build/
+.dart_tool/
+**/.dart_tool/
 
 # Python
 __pycache__/

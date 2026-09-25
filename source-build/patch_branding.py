@@ -148,10 +148,12 @@ def apply_full_rebrand(repo_dir: str, assets_dir: str, app_name: str = "DxDesk",
     return True
 
 if __name__ == "__main__":
+    default_assets = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "assets"))
     if len(sys.argv) < 2:
         print("Uso: python patch_branding.py <ruta_al_repo_clonado_de_rustdesk> [host] [pub_key]")
     else:
         repo = sys.argv[1]
         h = sys.argv[2] if len(sys.argv) > 2 else ""
         k = sys.argv[3] if len(sys.argv) > 3 else ""
-        apply_full_rebrand(repo, assets_dir=os.path.abspath("../assets"), app_name="DxDesk", host=h, pub_key=k)
+        apply_full_rebrand(repo, assets_dir=default_assets, app_name="DxDesk", host=h, pub_key=k)
+
