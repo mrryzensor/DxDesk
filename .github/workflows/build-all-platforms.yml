@@ -4,12 +4,9 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'client-packager/**'
-      - 'assets/**'
-      - 'logo.png'
-      - 'generate_assets.py'
-      - '.github/workflows/build-all-platforms.yml'
+  schedule:
+    # Se ejecuta automáticamente todos los días a las 03:00 UTC para detectar si RustDesk lanzó nueva versión
+    - cron: '0 3 * * *'
   workflow_dispatch:
     inputs:
       server_host:
@@ -47,6 +44,7 @@ jobs:
           python generate_assets.py
 
       - name: Download, Patch and Package All Platforms
+        id: packager
         run: |
           python client-packager/build_all_platforms.py "${{ github.event.inputs.server_host || '2mail.us' }}" "${{ github.event.inputs.server_key || '' }}"
 
@@ -135,22 +133,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: "v1.4.9"
-          name: "DxDesk v1.4.9 (Descargas Directas Sin ZIP)"
+          tag_name: ${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}
+          name: "DxDesk ${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }} (Descargas Directas Sin ZIP)"
           body: |
             ### 🚀 Clientes Oficiales DxDesk Multiplataforma
             Descarga directamente el archivo según tu sistema operativo (sin necesidad de descomprimir):
 
-            - 🪟 **Windows Instalador (.exe):** [DxDesk-Windows-Setup.exe](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Windows-Setup.exe)
-            - 🪟 **Windows Portable (.exe):** [DxDesk-Windows-x64.exe](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Windows-x64.exe)
-            - 📱 **Android Universal (.apk):** [DxDesk-Android-Universal.apk](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Android-Universal.apk)
-            - 📱 **Android ARM64 (.apk):** [DxDesk-Android-arm64.apk](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Android-arm64.apk)
-            - 🍎 **macOS Apple Silicon M1-M4 (.dmg):** [DxDesk-macOS-AppleSilicon.dmg](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-macOS-AppleSilicon.dmg)
-            - 🍎 **macOS Intel (.dmg):** [DxDesk-macOS-Intel.dmg](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-macOS-Intel.dmg)
-            - 🐧 **Linux Debian/Ubuntu (.deb):** [DxDesk-Linux-x64.deb](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Linux-x64.deb)
-            - 🐧 **Linux AppImage Universal (.AppImage):** [DxDesk-Linux-x64.AppImage](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Linux-x64.AppImage)
-            - 📲 **Código QR de Sincronización:** [DxDesk-Android-QR-Config.png](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Android-QR-Config.png)
-            - 📦 **Suite Completa en ZIP:** [DxDesk-All-Platforms.zip](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-All-Platforms.zip)
+            - 🪟 **Windows Instalador (.exe):** [DxDesk-Windows-Setup.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Windows-Setup.exe)
+            - 🪟 **Windows Portable (.exe):** [DxDesk-Windows-x64.exe](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Windows-x64.exe)
+            - 📱 **Android Universal (.apk):** [DxDesk-Android-Universal.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Android-Universal.apk)
+            - 📱 **Android ARM64 (.apk):** [DxDesk-Android-arm64.apk](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Android-arm64.apk)
+            - 🍎 **macOS Apple Silicon M1-M4 (.dmg):** [DxDesk-macOS-AppleSilicon.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-macOS-AppleSilicon.dmg)
+            - 🍎 **macOS Intel (.dmg):** [DxDesk-macOS-Intel.dmg](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-macOS-Intel.dmg)
+            - 🐧 **Linux Debian/Ubuntu (.deb):** [DxDesk-Linux-x64.deb](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Linux-x64.deb)
+            - 🐧 **Linux AppImage Universal (.AppImage):** [DxDesk-Linux-x64.AppImage](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Linux-x64.AppImage)
+            - 📲 **Código QR de Sincronización:** [DxDesk-Android-QR-Config.png](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Android-QR-Config.png)
+            - 📦 **Suite Completa en ZIP:** [DxDesk-All-Platforms.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-All-Platforms.zip)
 
             **Servidor predeterminado:** `${{ github.event.inputs.server_host || '2mail.us' }}`
           draft: false

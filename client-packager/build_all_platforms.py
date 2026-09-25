@@ -71,10 +71,21 @@ def generate_qr_code(config_str, dest_path):
 def build_all(host="2mail.us", key=""):
     ensure_tools()
     tag, assets = get_release_assets()
+    formatted_tag = tag if tag.startswith("v") else f"v{tag}"
     print(f"\n=======================================================")
-    print(f"  Preparando paquetes multiplataforma DxDesk v{tag}")
+    print(f"  Preparando paquetes multiplataforma DxDesk {formatted_tag}")
     print(f"  Servidor: {host}")
     print(f"=======================================================\n")
+
+    gh_output = os.environ.get("GITHUB_OUTPUT")
+    if gh_output:
+        with open(gh_output, "a", encoding="utf-8") as f:
+            f.write(f"version={formatted_tag}\n")
+
+    gh_env = os.environ.get("GITHUB_ENV")
+    if gh_env:
+        with open(gh_env, "a", encoding="utf-8") as f:
+            f.write(f"DXDESK_VERSION={formatted_tag}\n")
 
     # Mapeo de archivos deseados
     targets = {
