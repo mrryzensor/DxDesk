@@ -41,8 +41,8 @@ jniLibs
 .vscode
 
 # flutter rust bridge
-lib/generated_bridge.dart
-lib/generated_bridge.freezed.dart
+# lib/generated_bridge.dart
+
 
 # Flutter Generated Files
 **/GeneratedPluginRegistrant.swift

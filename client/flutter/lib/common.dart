@@ -2052,7 +2052,7 @@ Future<bool> restoreWindowPosition(WindowType type,
   }
   pos ??= bind.getLocalFlutterOption(k: windowFramePrefix + type.name);
 
-  var lpos = LastWindowPosition.loadFromString(pos);
+  var lpos = pos != null ? LastWindowPosition.loadFromString(pos) : null;
   if (lpos == null) {
     debugPrint("No window position saved, trying to center the window.");
     switch (type) {

@@ -14,7 +14,7 @@ on:
 
 jobs:
   build-windows:
-    name: Build Windows Client
+    name: Build Windows Client (Source)
     runs-on: windows-2022
     steps:
       - name: Checkout Repository
@@ -51,6 +51,22 @@ jobs:
       - name: Install LLVM
         run: choco install -y llvm
 
+      - name: Install flutter_rust_bridge_codegen
+        run: |
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+
+      - name: Generate Dart FFI Bridge
+        shell: pwsh
+        run: |
+          cd client
+          flutter_rust_bridge_codegen --rust-input src/flutter_ffi.rs --dart-output flutter/lib/generated_bridge.dart --rust-output src/bridge_generated.rs --skip-deps-check --no-build-runner
+
+      - name: Build Rust Core Library
+        shell: pwsh
+        run: |
+          cd client
+          cargo build --locked --features flutter --lib --release
+
       - name: Build Flutter Windows App
         shell: pwsh
         run: |
@@ -67,7 +83,12 @@ jobs:
           } elseif (Test-Path "client/flutter/build/windows/runner/Release") {
               Copy-Item "client/flutter/build/windows/runner/Release/*" "dist-windows-source/" -Recurse -Force
           }
-          # Copiar icono de DxDesk
+          if (Test-Path "client/target/release/librustdesk.dll") {
+              Copy-Item "client/target/release/librustdesk.dll" "dist-windows-source/" -Force
+          }
+          if (Test-Path "client/target/release/deps/dylib_virtual_display.dll") {
+              Copy-Item "client/target/release/deps/dylib_virtual_display.dll" "dist-windows-source/" -Force
+          }
           Copy-Item "assets/dxdesk.ico" "dist-windows-source/" -Force
 
       - name: Upload Windows DxDesk Release
