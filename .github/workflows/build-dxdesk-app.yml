@@ -49,29 +49,69 @@ jobs:
           channel: 'stable'
 
       - name: Install LLVM
-        run: choco install -y llvm
-
-      - name: Install flutter_rust_bridge_codegen
+        shell: pwsh
         run: |
+          choco install -y llvm
+          "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Install Bridge Tools and ffigen
+        shell: pwsh
+        run: |
+          cargo install cargo-expand --version 1.0.95 --locked
           cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+          dart pub global activate ffigen 8.0.2
 
       - name: Generate Dart FFI Bridge
         shell: pwsh
         run: |
-          cd client
-          flutter_rust_bridge_codegen --rust-input src/flutter_ffi.rs --dart-output flutter/lib/generated_bridge.dart --rust-output src/bridge_generated.rs --skip-deps-check --no-build-runner
+          $env:PATH = "C:\Program Files\LLVM\bin;" + $env:PATH
+          $env:LIBCLANG_PATH = "C:\Program Files\LLVM\bin"
+
+          # 1. Run flutter pub get in flutter project directory so .dart_tool is generated
+          cd client/flutter
+          flutter pub get
+
+          # 2. Duplicate pubspec and .dart_tool to client directory so ffigen resolves regardless of working directory
+          Copy-Item -Path ".dart_tool" -Destination "..\.dart_tool" -Recurse -Force
+          Copy-Item -Path "pubspec.yaml" -Destination "..\pubspec.yaml" -Force
+          Copy-Item -Path "pubspec.lock" -Destination "..\pubspec.lock" -Force
+
+          # 3. Generate bridge from client/flutter (standard RustDesk workflow)
+          Write-Host "Running flutter_rust_bridge_codegen from client/flutter..."
+          flutter_rust_bridge_codegen --rust-input ../src/flutter_ffi.rs --dart-output lib/generated_bridge.dart --rust-output ../src/bridge_generated.rs --skip-deps-check --no-build-runner
+
+          # 4. Fallback from client root if needed
+          if (-not (Test-Path "lib/generated_bridge.dart")) {
+              Write-Host "Running fallback codegen from client root..."
+              cd ..
+              flutter_rust_bridge_codegen --rust-input src/flutter_ffi.rs --dart-output flutter/lib/generated_bridge.dart --rust-output src/bridge_generated.rs --skip-deps-check --no-build-runner
+              cd flutter
+          }
+
+          if (Test-Path "lib/generated_bridge.dart") {
+              Write-Host "SUCCESS: lib/generated_bridge.dart generated successfully!"
+          } else {
+              Write-Error "ERROR: lib/generated_bridge.dart was not created!"
+              exit 1
+          }
 
       - name: Build Rust Core Library
         shell: pwsh
         run: |
           cd client
-          cargo build --locked --features flutter --lib --release
+          cargo build --features flutter --lib --release
+          if (Test-Path "target/release/librustdesk.dll") {
+              Write-Host "SUCCESS: target/release/librustdesk.dll compiled successfully!"
+          } else {
+              Write-Error "ERROR: target/release/librustdesk.dll not found."
+              exit 1
+          }
 
       - name: Build Flutter Windows App
         shell: pwsh
         run: |
           cd client/flutter
-          flutter pub get
           flutter build windows --release
 
       - name: Package Windows Artifacts
@@ -89,10 +129,16 @@ jobs:
           if (Test-Path "client/target/release/deps/dylib_virtual_display.dll") {
               Copy-Item "client/target/release/deps/dylib_virtual_display.dll" "dist-windows-source/" -Force
           }
+          if (Test-Path "dist-windows-source/rustdesk.exe") {
+              Copy-Item "dist-windows-source/rustdesk.exe" "dist-windows-source/DxDesk.exe" -Force
+          }
           Copy-Item "assets/dxdesk.ico" "dist-windows-source/" -Force
+          Compress-Archive -Path "dist-windows-source/*" -DestinationPath "DxDesk-Windows-x64-Source.zip" -Force
 
       - name: Upload Windows DxDesk Release
         uses: actions/upload-artifact@v4
         with:
           name: DxDesk-Windows-Source-Release
-          path: dist-windows-source/*
+          path: |
+            dist-windows-source/*
+            DxDesk-Windows-x64-Source.zip
