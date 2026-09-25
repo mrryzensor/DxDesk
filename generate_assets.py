@@ -21,8 +21,8 @@ def generate_all_assets(source_path="logo.png"):
     square_img.save("assets/logo_square.png")
     print("-> Guardado assets/logo_square.png")
 
-    # Tamaños de iconos estándar
-    sizes = [16, 24, 32, 48, 64, 128, 256, 512]
+    # Tamaños de iconos estándar para Android, Linux y Web
+    sizes = [16, 24, 32, 48, 64, 128, 192, 256, 512]
     for s in sizes:
         resized = square_img.resize((s, s), Image.Resampling.LANCZOS)
         resized.save(f"assets/icons/icon_{s}x{s}.png")
@@ -31,7 +31,14 @@ def generate_all_assets(source_path="logo.png"):
     # Generar archivo .ICO multi-capa para Windows
     ico_sizes = [(16, 16), (24, 24), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
     square_img.save("assets/dxdesk.ico", format="ICO", sizes=ico_sizes)
-    print("-> Guardado assets/dxdesk.ico (resoluciones de 16x16 a 256x256)")
+    print("-> Guardado assets/dxdesk.ico (Windows)")
+
+    # Generar archivo .ICNS para macOS
+    try:
+        square_img.save("assets/dxdesk.icns", format="ICNS")
+        print("-> Guardado assets/dxdesk.icns (macOS)")
+    except Exception as e:
+        print(f"Aviso al generar ICNS: {e}")
 
 if __name__ == "__main__":
     generate_all_assets()

@@ -1,0 +1,60 @@
+name: Build DxDesk Multiplatform (Windows, Android, Linux, macOS)
+
+on:
+  workflow_dispatch:
+    inputs:
+      server_host:
+        description: 'Host o Dominio del servidor (ej: 2mail.us)'
+        required: true
+        default: '2mail.us'
+      server_key:
+        description: 'Clave Pública del servidor (Key de id_ed25519.pub)'
+        required: true
+        default: ''
+
+jobs:
+  package-all-platforms:
+    name: Package All Platforms
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pillow qrcode
+
+      - name: Generate Multiplatform Assets
+        run: |
+          python generate_assets.py
+
+      - name: Download, Patch and Package All Platforms
+        run: |
+          python client-packager/build_all_platforms.py "${{ github.event.inputs.server_host }}" "${{ github.event.inputs.server_key }}"
+
+      - name: Compile Windows Installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (Test-Path $isccPath) {
+              # Copiar RustDesk2.toml temporalmente
+              Copy-Item "dist-all-platforms\RustDesk2.toml" "client-packager\output\" -Force
+              Copy-Item "dist-all-platforms\DxDesk-Windows-x64.exe" "dist\DxDesk.exe" -Force
+              Write-Host "Compilando instalador oficial de Windows..."
+              & $isccPath "client-packager\inno_setup_dxdesk.iss"
+              if (Test-Path "dist\DxDesk-Setup.exe") {
+                  Copy-Item "dist\DxDesk-Setup.exe" "dist-all-platforms\DxDesk-Windows-Setup.exe"
+              }
+          }
+
+      - name: Upload Multiplatform Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: DxDesk-Multiplatform-Clients
+          path: dist-all-platforms/*
