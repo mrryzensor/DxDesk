@@ -12,6 +12,11 @@ on:
         required: false
         default: ''
 
+env:
+  VCPKG_ROOT: "C:\\vcpkg"
+  VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
 jobs:
   build-windows:
     name: Build Windows Client (Source)
@@ -19,6 +24,13 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -48,12 +60,28 @@ jobs:
           flutter-version: '3.24.5'
           channel: 'stable'
 
-      - name: Install LLVM
+      - name: Install LLVM and NASM
         shell: pwsh
         run: |
-          choco install -y llvm
+          choco install -y llvm nasm
           "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Setup vcpkg with Github Actions binary cache
+        uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
+        with:
+          vcpkgDirectory: C:\vcpkg
+          vcpkgGitCommitId: 9e593bb18ea69cc5095e012465dcd675a822ed0d
+          doNotCache: false
+
+      - name: Install vcpkg C++ dependencies (libvpx, libyuv, opus, aom)
+        shell: pwsh
+        env:
+          VCPKG_DEFAULT_HOST_TRIPLET: x64-windows-static
+        run: |
+          cd client
+          Write-Host "Running vcpkg install for x64-windows-static..."
+          & $env:VCPKG_ROOT\vcpkg.exe install --triplet x64-windows-static --x-install-root="$env:VCPKG_ROOT\installed"
 
       - name: Install Bridge Tools and ffigen
         shell: pwsh
