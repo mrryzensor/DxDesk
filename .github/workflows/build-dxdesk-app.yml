@@ -170,11 +170,10 @@ jobs:
           }
           Copy-Item "assets/dxdesk.ico" "dist-windows-source/" -Force
           Compress-Archive -Path "dist-windows-source/*" -DestinationPath "DxDesk-Windows-x64-Source.zip" -Force
+          Copy-Item "DxDesk-Windows-x64-Source.zip" "dist-windows-source/" -Force
 
       - name: Upload Windows DxDesk Release
         uses: actions/upload-artifact@v4
         with:
           name: DxDesk-Windows-Source-Release
-          path: |
-            dist-windows-source/*
-            DxDesk-Windows-x64-Source.zip
+          path: dist-windows-source/*
