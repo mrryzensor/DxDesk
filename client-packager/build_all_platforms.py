@@ -68,7 +68,7 @@ def generate_qr_code(config_str, dest_path):
         except Exception as e:
             print(f"  Aviso: no se pudo generar QR ({e})")
 
-def build_all(host="2mail.us", key=""):
+def build_all(host="204.216.171.102", key=""):
     ensure_tools()
     tag, assets = get_release_assets()
     formatted_tag = tag if tag.startswith("v") else f"v{tag}"
@@ -206,6 +206,6 @@ Clave Pública: {key}
     print("="*55 + "\n")
 
 if __name__ == "__main__":
-    h = sys.argv[1] if (len(sys.argv) > 1 and sys.argv[1].strip()) else "2mail.us"
+    h = sys.argv[1] if (len(sys.argv) > 1 and sys.argv[1].strip()) else "204.216.171.102"
     k = sys.argv[2] if (len(sys.argv) > 2 and sys.argv[2].strip()) else ""
     build_all(h, k)

@@ -4,7 +4,7 @@ services:
   hbbs:
     container_name: dxdesk-hbbs
     image: rustdesk/rustdesk-server:latest
-    command: hbbs -r ${RELAY_HOST:-127.0.0.1}:21117 -k _
+    command: hbbs -r ${RELAY_HOST:-204.216.171.102}:21117 -k _
     volumes:
       - dxdesk-data:/root
     ports:

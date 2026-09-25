@@ -28,7 +28,7 @@ def generate_svg_wrapper(png_path: str, svg_dest: str):
     with open(svg_dest, "w", encoding="utf-8") as f:
         f.write(svg_content)
 
-def apply_branding(app_name="DxDesk", host="2mail.us", key=""):
+def apply_branding(app_name="DxDesk", host="204.216.171.102", key=""):
     print(f"\n=======================================================")
     print(f"  Aplicando Marca Profunda '{app_name}' en client/")
     print(f"  Servidor predeterminado: {host}")
@@ -149,6 +149,6 @@ def apply_branding(app_name="DxDesk", host="2mail.us", key=""):
     print("="*55 + "\n")
 
 if __name__ == "__main__":
-    h = sys.argv[1] if len(sys.argv) > 1 else "2mail.us"
+    h = sys.argv[1] if len(sys.argv) > 1 else "204.216.171.102"
     k = sys.argv[2] if len(sys.argv) > 2 else ""
     apply_branding(app_name="DxDesk", host=h, key=k)

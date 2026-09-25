@@ -6,7 +6,7 @@ on:
       server_host:
         description: 'Host o Dominio del servidor'
         required: true
-        default: '2mail.us'
+        default: '204.216.171.102'
       server_key:
         description: 'Clave Pública del servidor (id_ed25519.pub)'
         required: false

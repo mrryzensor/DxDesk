@@ -10,9 +10,9 @@ on:
   workflow_dispatch:
     inputs:
       server_host:
-        description: 'Host o Dominio del servidor (ej: 2mail.us)'
+        description: 'Host o IP del servidor (ej: 204.216.171.102)'
         required: false
-        default: '2mail.us'
+        default: '204.216.171.102'
       server_key:
         description: 'Clave Pública del servidor (Key de id_ed25519.pub)'
         required: false
@@ -46,7 +46,7 @@ jobs:
       - name: Download, Patch and Package All Platforms
         id: packager
         run: |
-          python client-packager/build_all_platforms.py "${{ github.event.inputs.server_host || '2mail.us' }}" "${{ github.event.inputs.server_key || '' }}"
+          python client-packager/build_all_platforms.py "${{ github.event.inputs.server_host || '204.216.171.102' }}" "${{ github.event.inputs.server_key || '' }}"
 
       - name: Install Inno Setup and Compile Windows Installer
         shell: pwsh
@@ -150,7 +150,7 @@ jobs:
             - 📲 **Código QR de Sincronización:** [DxDesk-Android-QR-Config.png](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-Android-QR-Config.png)
             - 📦 **Suite Completa en ZIP:** [DxDesk-All-Platforms.zip](https://github.com/${{ github.repository }}/releases/download/${{ steps.packager.outputs.version || env.DXDESK_VERSION || 'v1.4.9' }}/DxDesk-All-Platforms.zip)
 
-            **Servidor predeterminado:** `${{ github.event.inputs.server_host || '2mail.us' }}`
+            **Servidor predeterminado:** `${{ github.event.inputs.server_host || '204.216.171.102' }}`
           draft: false
           prerelease: false
           make_latest: true
