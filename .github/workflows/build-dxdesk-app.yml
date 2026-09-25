@@ -1,16 +1,22 @@
 name: Build DxDesk From Source (100% Branded UI)
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       server_host:
         description: 'Host o Dominio del servidor'
-        required: true
+        required: false
         default: '204.216.171.102'
       server_key:
         description: 'Clave Pública del servidor (id_ed25519.pub)'
         required: false
         default: ''
+
+permissions:
+  contents: write
 
 env:
   VCPKG_ROOT: "C:\\vcpkg"
@@ -47,7 +53,7 @@ jobs:
 
       - name: Apply DxDesk Deep UI Branding
         run: |
-          python client-packager/apply_dxdesk_branding.py "${{ github.event.inputs.server_host }}" "${{ github.event.inputs.server_key }}"
+          python client-packager/apply_dxdesk_branding.py "${{ github.event.inputs.server_host || '204.216.171.102' }}" "${{ github.event.inputs.server_key || '' }}"
 
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -172,8 +178,47 @@ jobs:
           Compress-Archive -Path "dist-windows-source/*" -DestinationPath "DxDesk-Windows-x64-Source.zip" -Force
           Copy-Item "DxDesk-Windows-x64-Source.zip" "dist-windows-source/" -Force
 
+      - name: Compile Official DxDesk Inno Setup Installer
+        shell: pwsh
+        run: |
+          choco install -y innosetup
+          $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $isccPath)) {
+              $isccPath = "C:\Program Files\Inno Setup 6\ISCC.exe"
+          }
+          New-Item -ItemType Directory -Path "dist" -Force | Out-Null
+          New-Item -ItemType Directory -Path "client-packager\output" -Force | Out-Null
+          
+          @"
+          custom-rendezvous-server = '204.216.171.102'
+          key = ''
+          relay-server = '204.216.171.102'
+          api-server = ''
+          "@ | Set-Content -Path "client-packager\output\RustDesk2.toml" -Encoding UTF8
+          
+          Copy-Item "dist-windows-source\DxDesk.exe" "dist\DxDesk.exe" -Force
+          if (Test-Path $isccPath) {
+              Write-Host "Compilando instalador oficial DxDesk-Windows-Setup.exe..."
+              & $isccPath "client-packager\inno_setup_dxdesk.iss"
+              if (Test-Path "dist\DxDesk-Setup.exe") {
+                  Copy-Item "dist\DxDesk-Setup.exe" "dist-windows-source\DxDesk-Windows-Setup.exe" -Force
+                  Copy-Item "dist\DxDesk-Setup.exe" "dist-windows-source\DxDesk-Setup.exe" -Force
+              }
+          }
+
       - name: Upload Windows DxDesk Release
         uses: actions/upload-artifact@v4
         with:
           name: DxDesk-Windows-Source-Release
           path: dist-windows-source/*
+
+      - name: Publish Official 100% Branded Windows Client to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: "v1.4.9"
+          name: "DxDesk v1.4.9 (Descargas Directas Sin ZIP)"
+          files: |
+            dist-windows-source/DxDesk-Windows-Setup.exe
+            dist-windows-source/DxDesk-Windows-x64-Source.zip
+            dist-windows-source/DxDesk.exe
