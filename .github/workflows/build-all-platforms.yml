@@ -45,6 +45,8 @@ jobs:
 
       - name: Download, Patch and Package All Platforms
         id: packager
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python client-packager/build_all_platforms.py "${{ github.event.inputs.server_host || '204.216.171.102' }}" "${{ github.event.inputs.server_key || '' }}"
 
@@ -58,9 +60,13 @@ jobs:
           }
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           New-Item -ItemType Directory -Path "client-packager\output" -Force | Out-Null
-          Copy-Item "dist-all-platforms\RustDesk2.toml" "client-packager\output\RustDesk2.toml" -Force
-          Copy-Item "dist-all-platforms\DxDesk-Windows-x64.exe" "dist\DxDesk.exe" -Force
-          if (Test-Path $isccPath) {
+          if (Test-Path "dist-all-platforms\RustDesk2.toml") {
+              Copy-Item "dist-all-platforms\RustDesk2.toml" "client-packager\output\RustDesk2.toml" -Force
+          }
+          if (Test-Path "dist-all-platforms\DxDesk-Windows-x64.exe") {
+              Copy-Item "dist-all-platforms\DxDesk-Windows-x64.exe" "dist\DxDesk.exe" -Force
+          }
+          if ((Test-Path $isccPath) -and (Test-Path "dist\DxDesk.exe")) {
               Write-Host "Compiling Windows DxDesk installer..."
               & $isccPath "client-packager\inno_setup_dxdesk.iss"
               if (Test-Path "dist\DxDesk-Setup.exe") {

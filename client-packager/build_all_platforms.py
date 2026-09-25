@@ -137,22 +137,34 @@ def ensure_tools():
 
 def get_release_assets():
     api_url = "https://api.github.com/repos/rustdesk/rustdesk/releases/latest"
-    req = urllib.request.Request(api_url, headers={"User-Agent": "DxDesk-Multiplatform"})
+    headers = {"User-Agent": "DxDesk-Multiplatform"}
+    token = os.environ.get("GITHUB_TOKEN")
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    tag = "1.4.9"
+    assets = []
     try:
+        req = urllib.request.Request(api_url, headers=headers)
         with urllib.request.urlopen(req) as resp:
             data = json.loads(resp.read().decode())
-            tag = data.get("tag_name", "1.4.9")
-            return tag, data.get("assets", [])
+            raw_tag = data.get("tag_name", "1.4.9")
+            tag = raw_tag.lstrip("v")
+            assets = data.get("assets", [])
     except Exception as e:
-        print(f"Aviso al consultar GitHub API: {e}. Usando versión 1.4.9")
-        return "1.4.9", []
+        print(f"Aviso al consultar GitHub API: {e}. Usando versión fallback 1.4.9")
+        tag = "1.4.9"
+        assets = []
+
+    return tag, assets
 
 def download_asset(url, dest_path):
-    if os.path.exists(dest_path):
+    if os.path.exists(dest_path) and os.path.getsize(dest_path) > 1000:
         print(f"  [Cache] {os.path.basename(dest_path)} ya existe.")
         return
     print(f"  Descargando {os.path.basename(dest_path)}...")
-    urllib.request.urlretrieve(url, dest_path)
+    req = urllib.request.Request(url, headers={"User-Agent": "DxDesk-Multiplatform"})
+    with urllib.request.urlopen(req) as response, open(dest_path, 'wb') as out_file:
+        shutil.copyfileobj(response, out_file)
 
 def generate_qr_code(config_str, dest_path):
     try:
@@ -176,7 +188,8 @@ def generate_qr_code(config_str, dest_path):
 def build_all(host="204.216.171.102", key=""):
     ensure_tools()
     tag, assets = get_release_assets()
-    formatted_tag = tag if tag.startswith("v") else f"v{tag}"
+    clean_tag = tag.lstrip("v")
+    formatted_tag = f"v{clean_tag}"
     print(f"\n=======================================================")
     print(f"  Preparando paquetes multiplataforma DxDesk {formatted_tag}")
     print(f"  Servidor: {host}")
@@ -191,6 +204,19 @@ def build_all(host="204.216.171.102", key=""):
     if gh_env:
         with open(gh_env, "a", encoding="utf-8") as f:
             f.write(f"DXDESK_VERSION={formatted_tag}\n")
+
+    # Si assets está vacío (ej: rate limit de GitHub API), usar URLs directas oficiales
+    if not assets:
+        print("  [i] Utilizando URLs de descarga directa de RustDesk...")
+        assets = [
+            {"name": f"rustdesk-{clean_tag}-x86_64.exe", "browser_download_url": f"https://github.com/rustdesk/rustdesk/releases/download/{clean_tag}/rustdesk-{clean_tag}-x86_64.exe"},
+            {"name": f"rustdesk-{clean_tag}-universal-signed.apk", "browser_download_url": f"https://github.com/rustdesk/rustdesk/releases/download/{clean_tag}/rustdesk-{clean_tag}-universal-signed.apk"},
+            {"name": f"rustdesk-{clean_tag}-aarch64-signed.apk", "browser_download_url": f"https://github.com/rustdesk/rustdesk/releases/download/{clean_tag}/rustdesk-{clean_tag}-aarch64-signed.apk"},
+            {"name": f"rustdesk-{clean_tag}-x86_64.deb", "browser_download_url": f"https://github.com/rustdesk/rustdesk/releases/download/{clean_tag}/rustdesk-{clean_tag}-x86_64.deb"},
+            {"name": f"rustdesk-{clean_tag}-x86_64.AppImage", "browser_download_url": f"https://github.com/rustdesk/rustdesk/releases/download/{clean_tag}/rustdesk-{clean_tag}-x86_64.AppImage"},
+            {"name": f"rustdesk-{clean_tag}-aarch64.dmg", "browser_download_url": f"https://github.com/rustdesk/rustdesk/releases/download/{clean_tag}/rustdesk-{clean_tag}-aarch64.dmg"},
+            {"name": f"rustdesk-{clean_tag}-x86_64.dmg", "browser_download_url": f"https://github.com/rustdesk/rustdesk/releases/download/{clean_tag}/rustdesk-{clean_tag}-x86_64.dmg"},
+        ]
 
     # Mapeo de archivos deseados
     targets = {
