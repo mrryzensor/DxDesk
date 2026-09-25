@@ -1,16 +1,28 @@
 name: Build DxDesk Multiplatform (Windows, Android, Linux, macOS)
 
 on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'client-packager/**'
+      - 'assets/**'
+      - 'logo.png'
+      - 'generate_assets.py'
+      - '.github/workflows/build-all-platforms.yml'
   workflow_dispatch:
     inputs:
       server_host:
         description: 'Host o Dominio del servidor (ej: 2mail.us)'
-        required: true
+        required: false
         default: '2mail.us'
       server_key:
         description: 'Clave Pública del servidor (Key de id_ed25519.pub)'
         required: false
         default: ''
+
+permissions:
+  contents: write
 
 jobs:
   package-all-platforms:
@@ -36,7 +48,7 @@ jobs:
 
       - name: Download, Patch and Package All Platforms
         run: |
-          python client-packager/build_all_platforms.py "${{ github.event.inputs.server_host }}" "${{ github.event.inputs.server_key }}"
+          python client-packager/build_all_platforms.py "${{ github.event.inputs.server_host || '2mail.us' }}" "${{ github.event.inputs.server_key || '' }}"
 
       - name: Install Inno Setup and Compile Windows Installer
         shell: pwsh
@@ -58,14 +70,101 @@ jobs:
               }
           }
 
-      - name: Create All-Platforms ZIP Package
+      - name: Organize Separate Platform Packages
         shell: pwsh
         run: |
+          # Carpetas individuales para descargas separadas
+          New-Item -ItemType Directory -Path "dist-windows" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist-android" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist-macos" -Force | Out-Null
+          New-Item -ItemType Directory -Path "dist-linux" -Force | Out-Null
+
+          # Windows
+          Get-ChildItem "dist-all-platforms" -Filter "*Windows*" | ForEach-Object { Copy-Item $_.FullName "dist-windows/" -Force }
+          Copy-Item "dist-all-platforms/configure_windows.ps1" "dist-windows/" -Force
+          Copy-Item "dist-all-platforms/RustDesk2.toml" "dist-windows/" -Force
+
+          # Android
+          Get-ChildItem "dist-all-platforms" -Filter "*Android*" | ForEach-Object { Copy-Item $_.FullName "dist-android/" -Force }
+
+          # macOS
+          Get-ChildItem "dist-all-platforms" -Filter "*macOS*" | ForEach-Object { Copy-Item $_.FullName "dist-macos/" -Force }
+          Copy-Item "dist-all-platforms/configure_linux_mac.sh" "dist-macos/" -Force
+          Copy-Item "dist-all-platforms/RustDesk2.toml" "dist-macos/" -Force
+
+          # Linux
+          Get-ChildItem "dist-all-platforms" -Filter "*Linux*" | ForEach-Object { Copy-Item $_.FullName "dist-linux/" -Force }
+          Copy-Item "dist-all-platforms/configure_linux_mac.sh" "dist-linux/" -Force
+          Copy-Item "dist-all-platforms/RustDesk2.toml" "dist-linux/" -Force
+
+          # ZIP completo general
           Compress-Archive -Path "dist-all-platforms/*" -DestinationPath "DxDesk-All-Platforms.zip" -Force
           Copy-Item "DxDesk-All-Platforms.zip" "dist-all-platforms/" -Force
 
-      - name: Upload Multiplatform Artifacts
+      - name: Upload Windows Package (Individual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DxDesk-Windows-Package
+          path: dist-windows/*
+
+      - name: Upload Android Package (Individual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DxDesk-Android-Package
+          path: dist-android/*
+
+      - name: Upload macOS Package (Individual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DxDesk-macOS-Package
+          path: dist-macos/*
+
+      - name: Upload Linux Package (Individual)
+        uses: actions/upload-artifact@v4
+        with:
+          name: DxDesk-Linux-Package
+          path: dist-linux/*
+
+      - name: Upload All Platforms Suite
         uses: actions/upload-artifact@v4
         with:
           name: DxDesk-All-Platforms-Suite
           path: dist-all-platforms/*
+
+      - name: Publish Direct Downloads to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: "v1.4.9"
+          name: "DxDesk v1.4.9 (Descargas Directas Sin ZIP)"
+          body: |
+            ### 🚀 Clientes Oficiales DxDesk Multiplataforma
+            Descarga directamente el archivo según tu sistema operativo (sin necesidad de descomprimir):
+
+            - 🪟 **Windows Instalador (.exe):** [DxDesk-Windows-Setup.exe](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Windows-Setup.exe)
+            - 🪟 **Windows Portable (.exe):** [DxDesk-Windows-x64.exe](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Windows-x64.exe)
+            - 📱 **Android Universal (.apk):** [DxDesk-Android-Universal.apk](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Android-Universal.apk)
+            - 📱 **Android ARM64 (.apk):** [DxDesk-Android-arm64.apk](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Android-arm64.apk)
+            - 🍎 **macOS Apple Silicon M1-M4 (.dmg):** [DxDesk-macOS-AppleSilicon.dmg](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-macOS-AppleSilicon.dmg)
+            - 🍎 **macOS Intel (.dmg):** [DxDesk-macOS-Intel.dmg](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-macOS-Intel.dmg)
+            - 🐧 **Linux Debian/Ubuntu (.deb):** [DxDesk-Linux-x64.deb](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Linux-x64.deb)
+            - 🐧 **Linux AppImage Universal (.AppImage):** [DxDesk-Linux-x64.AppImage](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Linux-x64.AppImage)
+            - 📲 **Código QR de Sincronización:** [DxDesk-Android-QR-Config.png](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-Android-QR-Config.png)
+            - 📦 **Suite Completa en ZIP:** [DxDesk-All-Platforms.zip](https://github.com/${{ github.repository }}/releases/download/v1.4.9/DxDesk-All-Platforms.zip)
+
+            **Servidor predeterminado:** `${{ github.event.inputs.server_host || '2mail.us' }}`
+          draft: false
+          prerelease: false
+          make_latest: true
+          files: |
+            dist-all-platforms/DxDesk-Windows-Setup.exe
+            dist-all-platforms/DxDesk-Windows-x64.exe
+            dist-all-platforms/DxDesk-Android-Universal.apk
+            dist-all-platforms/DxDesk-Android-arm64.apk
+            dist-all-platforms/DxDesk-macOS-AppleSilicon.dmg
+            dist-all-platforms/DxDesk-macOS-Intel.dmg
+            dist-all-platforms/DxDesk-Linux-x64.deb
+            dist-all-platforms/DxDesk-Linux-x64.AppImage
+            dist-all-platforms/DxDesk-Android-QR-Config.png
+            dist-all-platforms/RustDesk2.toml
+            dist-all-platforms/DxDesk-All-Platforms.zip

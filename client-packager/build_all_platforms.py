@@ -195,6 +195,6 @@ Clave Pública: {key}
     print("="*55 + "\n")
 
 if __name__ == "__main__":
-    h = sys.argv[1] if len(sys.argv) > 1 else "2mail.us"
-    k = sys.argv[2] if len(sys.argv) > 2 else ""
+    h = sys.argv[1] if (len(sys.argv) > 1 and sys.argv[1].strip()) else "2mail.us"
+    k = sys.argv[2] if (len(sys.argv) > 2 and sys.argv[2].strip()) else ""
     build_all(h, k)
