@@ -1,0 +1,22 @@
+# Archivos de entorno y credenciales
+.env
+*.env
+*.key
+*.pub
+data/
+server/data/
+
+# Binarios y compilaciones
+dist/
+build/
+*.exe
+client-packager/tools/*.exe
+client-packager/output/
+
+# Python
+__pycache__/
+*.pyc
+
+# SO
+.DS_Store
+Thumbs.db
