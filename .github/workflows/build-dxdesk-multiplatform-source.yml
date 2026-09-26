@@ -8,6 +8,11 @@ on:
 
 permissions:
   contents: write
+  actions: write
+
+concurrency:
+  group: build-dxdesk-multiplatform-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   FLUTTER_VERSION: "3.24.5"
@@ -21,14 +26,15 @@ jobs:
   build-android:
     name: Android (source branded)
     runs-on: ubuntu-24.04
+    timeout-minutes: 120
     steps:
       - name: Checkout source and submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Setup Python and branding assets
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -63,6 +69,13 @@ jobs:
           ndk-version: r28c
           add-to-path: true
 
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
@@ -77,7 +90,9 @@ jobs:
         shell: bash
         run: |
           for abi in arm64-v8a armeabi-v7a x86_64; do
-            ./client/flutter/build_android_deps.sh "$abi"
+            # Git no garantiza el bit executable de los scripts del submódulo.
+            # Invocarlos con bash evita el error 126 en runners Linux nuevos.
+            bash ./client/flutter/build_android_deps.sh "$abi"
           done
 
       - name: Setup Rust and bridge generators
@@ -108,9 +123,9 @@ jobs:
         shell: bash
         run: |
           rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
-          ./flutter/ndk_arm64.sh
-          ./flutter/ndk_arm.sh
-          ./flutter/ndk_x64.sh
+          bash ./flutter/ndk_arm64.sh
+          bash ./flutter/ndk_arm.sh
+          bash ./flutter/ndk_x64.sh
           mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
           mkdir -p flutter/android/app/src/main/jniLibs/armeabi-v7a
           mkdir -p flutter/android/app/src/main/jniLibs/x86_64
@@ -147,14 +162,15 @@ jobs:
   build-linux:
     name: Linux x64 (source branded)
     runs-on: ubuntu-22.04
+    timeout-minutes: 120
     steps:
       - name: Checkout source and submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Setup Python and branding assets
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -188,6 +204,13 @@ jobs:
           targets: x86_64-unknown-linux-gnu
           components: rustfmt
 
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
@@ -198,8 +221,21 @@ jobs:
       - name: Install Linux native dependencies
         shell: bash
         run: |
+          set -euo pipefail
           client_root="$GITHUB_WORKSPACE/client"
-          "$VCPKG_ROOT/vcpkg" install --triplet x64-linux --x-install-root="$VCPKG_ROOT/installed"
+          test -x "$VCPKG_ROOT/vcpkg"
+          vcpkg_args=(install --triplet x64-linux --x-manifest-root="$client_root" --x-install-root="$VCPKG_ROOT/installed")
+          for attempt in 1 2 3; do
+            if "$VCPKG_ROOT/vcpkg" "${vcpkg_args[@]}"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "vcpkg install failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "vcpkg install failed; retrying in $((attempt * 10)) seconds..." >&2
+            sleep $((attempt * 10))
+          done
           cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
           dart pub global activate ffigen 8.0.2
           echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
@@ -223,7 +259,8 @@ jobs:
         working-directory: client
         shell: bash
         run: |
-          python3 -m pip install git+https://github.com/rustdesk-org/appimage-builder.git
+          sudo python3 -m pip install --disable-pip-version-check git+https://github.com/rustdesk-org/appimage-builder.git
+          command -v appimage-builder
           cp rustdesk-*.deb appimage/rustdesk.deb
           pushd appimage
           sudo appimage-builder --skip-tests --recipe ./AppImageBuilder-x86_64.yml
@@ -247,6 +284,7 @@ jobs:
   build-macos:
     name: macOS ${{ matrix.arch }} (source branded)
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -261,12 +299,12 @@ jobs:
             vcpkg_triplet: arm64-osx
     steps:
       - name: Checkout source and submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           submodules: recursive
 
       - name: Setup Python and branding assets
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -298,6 +336,13 @@ jobs:
           targets: ${{ matrix.rust_target }}
           components: rustfmt
 
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+
       - name: Setup vcpkg
         uses: lukka/run-vcpkg@v11
         with:
@@ -307,7 +352,21 @@ jobs:
       - name: Install macOS native dependencies and generate bridge
         shell: bash
         run: |
-          "$VCPKG_ROOT/vcpkg" install --triplet "${{ matrix.vcpkg_triplet }}" --x-install-root="$VCPKG_ROOT/installed"
+          set -euo pipefail
+          client_root="$GITHUB_WORKSPACE/client"
+          test -x "$VCPKG_ROOT/vcpkg"
+          vcpkg_args=(install --triplet "${{ matrix.vcpkg_triplet }}" --x-manifest-root="$client_root" --x-install-root="$VCPKG_ROOT/installed")
+          for attempt in 1 2 3; do
+            if "$VCPKG_ROOT/vcpkg" "${vcpkg_args[@]}"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "vcpkg install failed after 3 attempts" >&2
+              exit 1
+            fi
+            echo "vcpkg install failed; retrying in $((attempt * 10)) seconds..." >&2
+            sleep $((attempt * 10))
+          done
           cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
           dart pub global activate ffigen 8.0.2
           echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
@@ -317,6 +376,7 @@ jobs:
             --rust-input ../src/flutter_ffi.rs \
             --dart-output lib/generated_bridge.dart \
             --rust-output ../src/bridge_generated.rs \
+            --c-output macos/Runner/bridge_generated.h \
             --skip-deps-check
           dart run build_runner build --delete-conflicting-outputs
 
@@ -350,9 +410,10 @@ jobs:
     name: Publish individual source-built packages
     needs: [build-android, build-linux, build-macos]
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout for release metadata
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Download platform packages
         uses: actions/download-artifact@v4
