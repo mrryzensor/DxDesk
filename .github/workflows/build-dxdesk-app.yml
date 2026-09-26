@@ -26,7 +26,8 @@ concurrency:
 env:
   VCPKG_ROOT: "C:\\vcpkg"
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  # The pinned vcpkg revision no longer supports the x-gha backend.
+  VCPKG_BINARY_SOURCES: "clear"
 
 jobs:
   build-windows:
@@ -49,9 +50,10 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install Python dependencies
+      - name: Install Python dependencies for branding and portable packer
         run: |
-          pip install pillow
+          python -m pip install --upgrade pillow -r client/libs/portable/requirements.txt
+          python -c "import PIL, brotli; print('Python packaging dependencies are available')"
 
       - name: Generate Icon Assets
         run: |
@@ -87,7 +89,7 @@ jobs:
           "C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
-      - name: Setup vcpkg with Github Actions binary cache
+      - name: Setup vcpkg
         uses: lukka/run-vcpkg@b1a0dd252f06b9e25b3c022a9a03bd7a427fb6a2
         with:
           vcpkgDirectory: C:\vcpkg
