@@ -3730,29 +3730,7 @@ Color? disabledTextColor(BuildContext context, bool enabled) {
       : Theme.of(context).textTheme.titleLarge?.color?.withOpacity(0.6);
 }
 
-Widget loadPowered(BuildContext context) {
-  if (bind.mainGetBuildinOption(key: "hide-powered-by-me") == 'Y') {
-    return SizedBox.shrink();
-  }
-  return MouseRegion(
-    cursor: SystemMouseCursors.click,
-    child: GestureDetector(
-      onTap: () {
-        launchUrl(Uri.parse('https://rustdesk.com'));
-      },
-      child: Opacity(
-          opacity: 0.5,
-          child: Text(
-            translate("powered_by_me"),
-            overflow: TextOverflow.clip,
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(fontSize: 9, decoration: TextDecoration.underline),
-          )),
-    ),
-  ).marginOnly(top: 6);
-}
+Widget loadPowered(BuildContext context) => const SizedBox.shrink();
 
 const _kDefaultLogoAsset = 'assets/logo.png';
 const _kLightLogoAsset = 'assets/logo_light.png';
@@ -4185,12 +4163,7 @@ List<String> getPrinterNames() {
 }
 
 String _appName = '';
-String get appName {
-  if (_appName.isEmpty) {
-    _appName = bind.mainGetAppNameSync();
-  }
-  return _appName;
-}
+String get appName => "DxDesk";
 
 String getConnectionText(bool secure, bool direct, String streamType) {
   String connectionText;

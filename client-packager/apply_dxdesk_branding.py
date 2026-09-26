@@ -56,6 +56,12 @@ def replace_in_file(path: Path, transform) -> bool:
     return updated != content and write_if_changed(path, updated)
 
 
+def _replace_literals(content: str, replacements: tuple[tuple[str, str], ...]) -> str:
+    for old, new in replacements:
+        content = content.replace(old, new)
+    return content
+
+
 def generate_svg_wrapper(png_path: Path, svg_dest: Path) -> None:
     encoded = base64.b64encode(png_path.read_bytes()).decode("ascii")
     svg = (
@@ -79,6 +85,41 @@ def generate_png_variant(source: Path, destination: Path, size: int) -> None:
     except ImportError:
         # The workflows install Pillow before running this overlay. Keep a
         # dependency-free fallback for local source preparation.
+        shutil.copyfile(source, destination)
+
+
+def generate_portable_label(source: Path, destination: Path, app_name: str) -> None:
+    """Generate the small branded label embedded in the Windows portable stub."""
+    if not source.exists() or not destination.parent.exists():
+        return
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+
+        canvas = Image.new("RGBA", (96, 32), (0, 0, 0, 0))
+        with Image.open(source) as image:
+            logo = image.convert("RGBA")
+            logo.thumbnail((24, 24), Image.Resampling.LANCZOS)
+            canvas.alpha_composite(logo, (4, (32 - logo.height) // 2))
+
+        draw = ImageDraw.Draw(canvas)
+        font = ImageFont.load_default()
+        bounds = draw.textbbox((0, 0), app_name, font=font)
+        text_width = bounds[2] - bounds[0]
+        text_height = bounds[3] - bounds[1]
+        draw.text(
+            (32, (32 - text_height) // 2 - bounds[1]),
+            app_name,
+            fill=(255, 255, 255, 255),
+            font=font,
+        )
+        # Keep the label readable even if a future app name is wider than the
+        # portable stub's fixed 96px slot.
+        if text_width > 60:
+            draw.rectangle((92, 0, 95, 31), fill=(0, 0, 0, 0))
+        canvas.save(destination, format="PNG")
+    except ImportError:
+        # All CI workflows install Pillow. This fallback still provides a valid
+        # image for local builds without the optional dependency.
         shutil.copyfile(source, destination)
 
 
@@ -149,14 +190,70 @@ def patch_branding(
     common_dart = client_dir / "flutter" / "lib" / "common.dart"
 
     def patch_dart(content: str) -> str:
-        return re.sub(
+        content = re.sub(
             r"(?s)String get appName\s*\{.*?\n\}",
             f'String get appName => "{app_name}";',
             content,
             count=1,
         )
+        # Do not expose the upstream attribution link in a branded client.
+        # Keep the widget as a no-op because callers still reference it.
+        return re.sub(
+            r"(?s)Widget loadPowered\(BuildContext context\) \{.*?\n\}\n\nconst _kDefaultLogoAsset",
+            "Widget loadPowered(BuildContext context) => const SizedBox.shrink();\n\nconst _kDefaultLogoAsset",
+            content,
+            count=1,
+        )
 
     replace_in_file(common_dart, patch_dart)
+
+    # Replace visible product labels while leaving protocol names, package IDs,
+    # native library names and compatibility paths unchanged.
+    visible_label_files = {
+        client_dir / "flutter" / "lib" / "mobile" / "pages" / "settings_page.dart": (
+            ("Keep RustDesk background service", f"Keep {app_name} background service"),
+            ("About RustDesk", f"About {app_name}"),
+        ),
+        client_dir / "flutter" / "lib" / "desktop" / "pages" / "desktop_setting_page.dart": (
+            ("About RustDesk", f"About {app_name}"),
+        ),
+        client_dir / "flutter" / "lib" / "desktop" / "widgets" / "tabbar_widget.dart": (
+            ('"RustDesk",', f'"{app_name}",'),
+        ),
+        client_dir / "flutter" / "android" / "app" / "src" / "main" / "kotlin" / "com" / "carriez" / "flutter_hbb" / "BootReceiver.kt": (
+            ('"RustDesk is Open"', f'"{app_name} is Open"'),
+        ),
+        client_dir / "flutter" / "android" / "app" / "src" / "main" / "kotlin" / "com" / "carriez" / "flutter_hbb" / "FloatingWindowService.kt": (
+            ('translate("Show RustDesk")', f'translate("Show {app_name}")'),
+        ),
+        client_dir / "flutter" / "android" / "app" / "src" / "main" / "kotlin" / "com" / "carriez" / "flutter_hbb" / "MainService.kt": (
+            ('"RustDesk"', f'"{app_name}"'),
+            ('"RustDesk Service"', f'"{app_name} Service"'),
+            ('"RustDesk Service Channel"', f'"{app_name} Service Channel"'),
+        ),
+    }
+    for path, replacements in visible_label_files.items():
+        replace_in_file(
+            path,
+            lambda text, replacements=replacements: _replace_literals(text, replacements),
+        )
+
+    # The legacy UI and all language packs share this attribution key. Emptying
+    # it protects builds that still load the legacy UI while the Flutter widget
+    # above remains a harmless no-op.
+    for language_file in (client_dir / "src" / "lang").glob("*.rs"):
+        replace_in_file(
+            language_file,
+            lambda text: re.sub(
+                r'(\("powered_by_me",\s*)"(?:[^"\\]|\\.)*"',
+                r'\1""',
+                text,
+            ),
+        )
+    replace_in_file(
+        client_dir / "src" / "ui" / "index.tis",
+        lambda text: text.replace("translate('powered_by_me')", '""'),
+    )
 
     # Assets used by Flutter, the native runners and Linux package builders.
     logo_square = ASSETS_DIR / "logo_square.png"
@@ -199,6 +296,14 @@ def patch_branding(
         scalable_svg = res_dir / "scalable.svg"
         if scalable_svg.exists() or logo_square.exists():
             generate_svg_wrapper(logo_square, scalable_svg)
+
+        # The portable packer includes this file at compile time. RustDesk's
+        # upstream .gitignore excludes it, so create it on every clean runner.
+        generate_portable_label(
+            logo_square,
+            client_dir / "libs" / "portable" / "src" / "res" / "label.png",
+            app_name,
+        )
 
     windows_resources = client_dir / "flutter" / "windows" / "runner" / "resources"
     copy_if_available(ico, windows_resources / "app_icon.ico")
@@ -266,6 +371,9 @@ def patch_branding(
         return content
 
     replace_in_file(cargo_toml, patch_cargo)
+
+    portable_cargo_toml = client_dir / "libs" / "portable" / "Cargo.toml"
+    replace_in_file(portable_cargo_toml, patch_cargo)
 
     # Android, iOS, macOS and Linux visible labels. Internal protocol names,
     # package IDs and URI schemes intentionally remain RustDesk-compatible.
@@ -356,8 +464,26 @@ def patch_branding(
     android_res = client_dir / "flutter" / "android" / "app" / "src" / "main" / "res"
     for directory, source in mipmap_sizes.items():
         if source.exists():
-            for candidate in android_res.glob(f"{directory}*/ic_launcher*.png"):
-                copy_if_available(source, candidate)
+            destination_dir = android_res / directory
+            for name in ("ic_launcher.png", "ic_launcher_round.png", "ic_launcher_foreground.png"):
+                copy_if_available(source, destination_dir / name)
+            # Android notification icons are also ignored by the upstream
+            # checkout but are referenced by MainService.kt.
+            copy_if_available(icon_32, destination_dir / "ic_stat_logo.png")
+
+    required_branding_assets = [
+        client_dir / "libs" / "portable" / "src" / "res" / "label.png",
+        *(
+            android_res / directory / "ic_launcher_foreground.png"
+            for directory in mipmap_sizes
+        ),
+    ]
+    missing_assets = [str(path) for path in required_branding_assets if not path.is_file()]
+    if missing_assets:
+        raise RuntimeError(
+            "No se pudieron generar los recursos de branding requeridos:\n"
+            + "\n".join(missing_assets)
+        )
 
     print("Marca y recursos aplicados correctamente.")
 

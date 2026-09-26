@@ -113,7 +113,6 @@ const CHARS: &[char] = &[
     '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k',
     'm', 'n', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z',
 ];
-
 pub const RENDEZVOUS_SERVERS: &[&str] = &["204.216.171.102"];
 pub const RS_PUB_KEY: &str = "NH9EpepEnWXY5I8r3lv2qnCNDxYucPzDtoBsK6imNcg=";
 
