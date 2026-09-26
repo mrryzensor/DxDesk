@@ -173,6 +173,10 @@ jobs:
           cp build/app/outputs/flutter-apk/app-release.apk ../DxDesk-Android-Universal.apk
           flutter build apk --release --target-platform android-arm64 --split-per-abi
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../DxDesk-Android-arm64.apk
+          test -s ../DxDesk-Android-Universal.apk
+          test -s ../DxDesk-Android-arm64.apk
+          unzip -t ../DxDesk-Android-Universal.apk >/dev/null
+          unzip -t ../DxDesk-Android-arm64.apk >/dev/null
 
       - name: Upload source-built Android packages
         uses: actions/upload-artifact@v4
@@ -305,6 +309,10 @@ jobs:
           deb=$(find . -maxdepth 1 -type f -name 'rustdesk-*.deb' | head -n 1)
           test -n "$deb"
           cp "$deb" DxDesk-Linux-x64.deb
+          test -s DxDesk-Linux-x64.AppImage
+          test -x DxDesk-Linux-x64.AppImage
+          dpkg-deb --info DxDesk-Linux-x64.deb >/dev/null
+          file DxDesk-Linux-x64.AppImage | grep -q 'ELF'
 
       - name: Upload source-built Linux packages
         uses: actions/upload-artifact@v4
@@ -432,6 +440,8 @@ jobs:
             --window-size 800 400 \
             --app-drop-link 600 185 \
             "DxDesk-macOS-${{ matrix.arch }}.dmg" "$app"
+          test -s "DxDesk-macOS-${{ matrix.arch }}.dmg"
+          hdiutil imageinfo "DxDesk-macOS-${{ matrix.arch }}.dmg" >/dev/null
 
       - name: Upload source-built macOS package
         uses: actions/upload-artifact@v4

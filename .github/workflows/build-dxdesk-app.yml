@@ -281,6 +281,19 @@ jobs:
               Write-Error "Falta el instalador DxDesk-Windows-Setup.exe"
               exit 1
           }
+          $portableBytes = Get-Content "dist-windows-source\DxDesk-Windows-x64.exe" -Encoding Byte -TotalCount 2
+          if (($portableBytes.Count -ne 2) -or ($portableBytes[0] -ne 0x4D) -or ($portableBytes[1] -ne 0x5A)) {
+              Write-Error "DxDesk-Windows-x64.exe no tiene una cabecera PE válida"
+              exit 1
+          }
+          if ((Get-Item "dist-windows-source\DxDesk-Windows-x64.exe").Length -lt 1MB) {
+              Write-Error "El ejecutable portable de Windows es anormalmente pequeño"
+              exit 1
+          }
+          if ((Get-Item "dist-windows-source\DxDesk-Windows-Setup.exe").Length -lt 1MB) {
+              Write-Error "El instalador de Windows es anormalmente pequeño"
+              exit 1
+          }
 
       - name: Upload Windows DxDesk Release
         uses: actions/upload-artifact@v4
