@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - main
+    # A Windows-only workflow correction should not restart the long Android,
+    # Linux and macOS matrix. Source/resource changes still trigger this build.
+    paths-ignore:
+      - '.github/workflows/build-dxdesk-app.yml'
+      - '.github/workflows/build-dxdesk-multiplatform-source.yml'
   workflow_dispatch:
 
 permissions:

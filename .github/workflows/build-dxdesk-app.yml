@@ -293,7 +293,7 @@ jobs:
           # PowerShell 7 does not support -Encoding Byte; read the PE prefix
           # through .NET so the validation works on the hosted Windows runner.
           $portableBytes = [System.IO.File]::ReadAllBytes((Join-Path (Get-Location) "dist-windows-source\DxDesk-Windows-x64.exe"))
-          if (($portableBytes.Count -ne 2) -or ($portableBytes[0] -ne 0x4D) -or ($portableBytes[1] -ne 0x5A)) {
+          if (($portableBytes.Length -lt 2) -or ($portableBytes[0] -ne 0x4D) -or ($portableBytes[1] -ne 0x5A)) {
               Write-Error "DxDesk-Windows-x64.exe no tiene una cabecera PE válida"
               exit 1
           }
