@@ -29,7 +29,7 @@ DxDesk/
 │   └── DxDesk.exe                 # Ejecutable listo para Windows con tu logo y marca
 ├── source-build/                  # Utilidades de compilación desde código fuente
 ├── scripts/sync_rustdesk.py       # Sincroniza RustDesk master y reaplica la marca
-└── .github/workflows/sync-upstream.yml
+└── .github/workflows/              # Sincronización y builds nativos por plataforma
 ```
 
 ---
@@ -107,15 +107,17 @@ Si en algún momento actualizas `logo.png`:
 El workflow **Sync RustDesk upstream** consulta diariamente `rustdesk/rustdesk`
 en la rama `master`. Cuando encuentra un commit nuevo, reemplaza la copia de
 `client/`, reaplica `branding.json` y sube un commit a `main`. Ese commit inicia
-la compilación de Windows con la marca DxDesk.
+las compilaciones de fuente de Windows, Android, Linux y macOS.
 
 `client/` se considera una copia vendorizada generada: cualquier cambio manual
 que no forme parte de la configuración de marca se sobrescribirá en la siguiente
 sincronización.
 
-La marca se aplica a la interfaz Flutter, recursos de las plataformas, metadatos
-de Windows, iconos y servidor predeterminado. Los nombres internos de protocolo,
-paquetes y esquemas `rustdesk://` se conservan para mantener la compatibilidad.
+La marca se aplica dentro de la interfaz Flutter, recursos nativos de cada
+plataforma, metadatos, iconos, instaladores y servidor predeterminado. Los
+nombres internos de protocolo, paquetes, binarios compatibles y esquemas
+`rustdesk://` se conservan únicamente donde son necesarios para mantener la
+compatibilidad.
 
 También se puede ejecutar manualmente desde **Actions > Sync RustDesk upstream**.
 
@@ -129,14 +131,14 @@ GitHub siempre descarga los artefactos de `actions/upload-artifact` como un ZIP,
 aunque dentro haya un `.exe`. Para descargar archivos individuales hay que abrir
 la sección **Releases** y usar los assets publicados allí.
 
-La release `official-*` del workflow multiplataforma publica directamente los
-paquetes `.exe`, `.apk`, `.dmg`, `.deb` y `.AppImage`; el ZIP completo ya no se
-publica como asset de Release.
+El workflow `Build DxDesk Other Platforms From Source` compila desde `master`:
 
-La compilación desde `master` configurada en este proyecto es la de Windows.
-El workflow multiplataforma conserva, por ahora, los paquetes del último release
-oficial de RustDesk; compilar Android, Linux y macOS directamente desde `master`
-requiere runners y dependencias nativas adicionales.
+- Android: APK universal y APK ARM64 con nombre, logo y etiqueta personalizados.
+- Linux: paquete `.deb` y AppImage con interfaz, iconos y archivos `.desktop` personalizados.
+- macOS: DMG Intel y Apple Silicon con `DxDesk.app`, `PRODUCT_NAME` e icono personalizados.
+
+Estos paquetes se publican individualmente en una release `source-*`. Windows se
+publica individualmente en la release `RustDesk main` del workflow de Windows.
 
 ---
 

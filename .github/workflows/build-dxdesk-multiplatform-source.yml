@@ -1,0 +1,411 @@
+name: Build DxDesk Other Platforms From Source
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: "3.24.5"
+  RUST_VERSION: "1.75"
+  MAC_RUST_VERSION: "1.81"
+  VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
+  CARGO_NDK_VERSION: "3.1.2"
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+jobs:
+  build-android:
+    name: Android (source branded)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python and branding assets
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies
+        run: python -m pip install --upgrade pillow
+
+      - name: Apply DxDesk branding to Android source
+        run: |
+          python generate_assets.py
+          python client-packager/apply_dxdesk_branding.py --client-dir client
+
+      - name: Install Android and RustDesk build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake curl gcc-multilib git g++-multilib \
+            libasound2-dev libclang-dev libunwind-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
+            libpulse-dev libva-dev llvm-dev nasm ninja-build \
+            openjdk-17-jdk-headless pkg-config wget
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Setup Android NDK
+        id: setup-ndk
+        uses: nttld/setup-ndk@v1
+        with:
+          ndk-version: r28c
+          add-to-path: true
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install Android native dependencies
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        shell: bash
+        run: |
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            ./client/flutter/build_android_deps.sh "$abi"
+          done
+
+      - name: Setup Rust and bridge generators
+        run: |
+          rustup toolchain install "${RUST_VERSION}" --profile minimal
+          rustup default "${RUST_VERSION}"
+          cargo install cargo-ndk --version "${CARGO_NDK_VERSION}" --locked
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+          dart pub global activate ffigen 8.0.2
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Generate Flutter bridge
+        working-directory: client/flutter
+        run: |
+          flutter pub get
+          flutter_rust_bridge_codegen \
+            --rust-input ../src/flutter_ffi.rs \
+            --dart-output lib/generated_bridge.dart \
+            --rust-output ../src/bridge_generated.rs \
+            --skip-deps-check
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build Rust Android libraries
+        working-directory: client
+        env:
+          ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+          ANDROID_NDK_ROOT: ${{ steps.setup-ndk.outputs.ndk-path }}
+        shell: bash
+        run: |
+          rustup target add aarch64-linux-android armv7-linux-androideabi x86_64-linux-android
+          ./flutter/ndk_arm64.sh
+          ./flutter/ndk_arm.sh
+          ./flutter/ndk_x64.sh
+          mkdir -p flutter/android/app/src/main/jniLibs/arm64-v8a
+          mkdir -p flutter/android/app/src/main/jniLibs/armeabi-v7a
+          mkdir -p flutter/android/app/src/main/jniLibs/x86_64
+          cp target/aarch64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/arm64-v8a/librustdesk.so
+          cp target/armv7-linux-androideabi/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/armeabi-v7a/librustdesk.so
+          cp target/x86_64-linux-android/release/liblibrustdesk.so flutter/android/app/src/main/jniLibs/x86_64/librustdesk.so
+          cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/aarch64-linux-android/libc++_shared.so" flutter/android/app/src/main/jniLibs/arm64-v8a/
+          cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/arm-linux-androideabi/libc++_shared.so" flutter/android/app/src/main/jniLibs/armeabi-v7a/
+          cp "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/sysroot/usr/lib/x86_64-linux-android/libc++_shared.so" flutter/android/app/src/main/jniLibs/x86_64/
+
+      - name: Build branded Android APKs
+        working-directory: client/flutter
+        env:
+          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+        shell: bash
+        run: |
+          export PATH="$JAVA_HOME/bin:$PATH"
+          sed -i "s/org.gradle.jvmargs=-Xmx1024M/org.gradle.jvmargs=-Xmx2g/g" android/gradle.properties
+          sed -i "s/signingConfigs.release/signingConfigs.debug/g" android/app/build.gradle
+          flutter build apk --release --target-platform android-arm64,android-arm,android-x64
+          cp build/app/outputs/flutter-apk/app-release.apk ../DxDesk-Android-Universal.apk
+          flutter build apk --release --target-platform android-arm64 --split-per-abi
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk ../DxDesk-Android-arm64.apk
+
+      - name: Upload source-built Android packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: dxdesk-source-android
+          path: |
+            client/DxDesk-Android-Universal.apk
+            client/DxDesk-Android-arm64.apk
+          if-no-files-found: error
+
+  build-linux:
+    name: Linux x64 (source branded)
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python and branding assets
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies and apply branding
+        run: |
+          python -m pip install --upgrade pillow
+          python generate_assets.py
+          python client-packager/apply_dxdesk_branding.py --client-dir client
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang cmake curl gcc g++ git libayatana-appindicator3-dev \
+            libasound2-dev libc6-dev libclang-dev libegl-dev libgles2-mesa-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev \
+            libpulse-dev libva-dev libxcb-randr0-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libxdo-dev libxfixes-dev libunwind-dev \
+            llvm-dev nasm ninja-build pkg-config python3-pip libfuse2 libarchive-tools
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+          targets: x86_64-unknown-linux-gnu
+          components: rustfmt
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgDirectory: /opt/artifacts/vcpkg
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install Linux native dependencies
+        shell: bash
+        run: |
+          client_root="$GITHUB_WORKSPACE/client"
+          "$VCPKG_ROOT/vcpkg" install --triplet x64-linux --x-install-root="$VCPKG_ROOT/installed"
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+          dart pub global activate ffigen 8.0.2
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+          cd "$client_root/flutter"
+          flutter pub get
+          flutter_rust_bridge_codegen \
+            --rust-input ../src/flutter_ffi.rs \
+            --dart-output lib/generated_bridge.dart \
+            --rust-output ../src/bridge_generated.rs \
+            --c-output macos/Runner/bridge_generated.h \
+            --skip-deps-check
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build branded Linux Debian package
+        working-directory: client
+        env:
+          VCPKG_DEFAULT_TRIPLET: x64-linux
+        run: python3 build.py --flutter --hwcodec --unix-file-copy-paste
+
+      - name: Build branded Linux AppImage
+        working-directory: client
+        shell: bash
+        run: |
+          python3 -m pip install git+https://github.com/rustdesk-org/appimage-builder.git
+          cp rustdesk-*.deb appimage/rustdesk.deb
+          pushd appimage
+          sudo appimage-builder --skip-tests --recipe ./AppImageBuilder-x86_64.yml
+          appimage=$(find . -maxdepth 1 -type f -name '*.AppImage' | head -n 1)
+          test -n "$appimage"
+          mv "$appimage" ../DxDesk-Linux-x64.AppImage
+          popd
+          deb=$(find . -maxdepth 1 -type f -name 'rustdesk-*.deb' | head -n 1)
+          test -n "$deb"
+          cp "$deb" DxDesk-Linux-x64.deb
+
+      - name: Upload source-built Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: dxdesk-source-linux
+          path: |
+            client/DxDesk-Linux-x64.deb
+            client/DxDesk-Linux-x64.AppImage
+          if-no-files-found: error
+
+  build-macos:
+    name: macOS ${{ matrix.arch }} (source branded)
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15-intel
+            arch: Intel
+            rust_target: x86_64-apple-darwin
+            vcpkg_triplet: x64-osx
+          - os: macos-14
+            arch: AppleSilicon
+            rust_target: aarch64-apple-darwin
+            vcpkg_triplet: arm64-osx
+    steps:
+      - name: Checkout source and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Python and branding assets
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Python dependencies and apply branding
+        run: |
+          python -m pip install --upgrade pillow
+          python generate_assets.py
+          python client-packager/apply_dxdesk_branding.py --client-dir client
+
+      - name: Install macOS build dependencies
+        shell: bash
+        run: |
+          brew install llvm create-dmg pkg-config
+          curl -L -o /tmp/nasm.zip https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/macosx/nasm-2.16.03-macosx.zip
+          unzip -o /tmp/nasm.zip -d /tmp/nasm
+          sudo cp /tmp/nasm/nasm-2.16.03/nasm /usr/local/bin/nasm
+          nasm --version
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.MAC_RUST_VERSION }}
+          targets: ${{ matrix.rust_target }}
+          components: rustfmt
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_COMMIT_ID }}
+          doNotCache: false
+
+      - name: Install macOS native dependencies and generate bridge
+        shell: bash
+        run: |
+          "$VCPKG_ROOT/vcpkg" install --triplet "${{ matrix.vcpkg_triplet }}" --x-install-root="$VCPKG_ROOT/installed"
+          cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
+          dart pub global activate ffigen 8.0.2
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+          cd client/flutter
+          flutter pub get
+          flutter_rust_bridge_codegen \
+            --rust-input ../src/flutter_ffi.rs \
+            --dart-output lib/generated_bridge.dart \
+            --rust-output ../src/bridge_generated.rs \
+            --skip-deps-check
+          dart run build_runner build --delete-conflicting-outputs
+
+      - name: Build branded macOS application
+        working-directory: client
+        shell: bash
+        run: |
+          if [ "${{ matrix.arch }}" = "AppleSilicon" ]; then
+            python3 build.py --flutter --hwcodec --unix-file-copy-paste --screencapturekit
+          else
+            python3 build.py --flutter --hwcodec --unix-file-copy-paste
+          fi
+          app="flutter/build/macos/Build/Products/Release/DxDesk.app"
+          test -d "$app"
+          create-dmg \
+            --volname "DxDesk Installer" \
+            --icon "DxDesk.app" 200 190 \
+            --hide-extension "DxDesk.app" \
+            --window-size 800 400 \
+            --app-drop-link 600 185 \
+            "DxDesk-macOS-${{ matrix.arch }}.dmg" "$app"
+
+      - name: Upload source-built macOS package
+        uses: actions/upload-artifact@v4
+        with:
+          name: dxdesk-source-macos-${{ matrix.arch }}
+          path: client/DxDesk-macOS-${{ matrix.arch }}.dmg
+          if-no-files-found: error
+
+  publish:
+    name: Publish individual source-built packages
+    needs: [build-android, build-linux, build-macos]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout for release metadata
+        uses: actions/checkout@v4
+
+      - name: Download platform packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: dxdesk-source-*
+          merge-multiple: true
+          path: dist-source
+
+      - name: Check individual package files and release identity
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          required=(
+            DxDesk-Android-Universal.apk
+            DxDesk-Android-arm64.apk
+            DxDesk-Linux-x64.deb
+            DxDesk-Linux-x64.AppImage
+            DxDesk-macOS-Intel.dmg
+            DxDesk-macOS-AppleSilicon.dmg
+          )
+          for file in "${required[@]}"; do
+            test -s "dist-source/$file" || { echo "Missing dist-source/$file" >&2; exit 1; }
+          done
+          version=$(sed -n 's/^version\s*=\s*"\([^"]*\)"/\1/p' client/Cargo.toml | head -n 1)
+          upstream_sha="${GITHUB_SHA}"
+          if test -f .upstream-rustdesk.json; then
+            upstream_sha=$(python3 -c 'import json; print(json.load(open(".upstream-rustdesk.json"))["commit"])')
+          fi
+          tag="source-v${version}-main.${upstream_sha:0:12}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish individual branded packages
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: "DxDesk ${{ steps.release.outputs.version }} (Todos los SO, source branded)"
+          body: |
+            Paquetes DxDesk compilados desde el código fuente de RustDesk y con branding interno aplicado.
+
+            - Android: nombre, iconos, logo y servidor personalizados.
+            - Linux: interfaz, iconos, `.desktop`, Debian y AppImage personalizados.
+            - macOS: interfaz, `PRODUCT_NAME`, bundle `.app`, icono y DMG personalizados.
+            - Windows: disponible en la release `RustDesk main` del workflow de Windows.
+          files: |
+            dist-source/DxDesk-Android-Universal.apk
+            dist-source/DxDesk-Android-arm64.apk
+            dist-source/DxDesk-Linux-x64.deb
+            dist-source/DxDesk-Linux-x64.AppImage
+            dist-source/DxDesk-macOS-Intel.dmg
+            dist-source/DxDesk-macOS-AppleSilicon.dmg
+          fail_on_unmatched_files: true
+          draft: false
+          prerelease: false
+          make_latest: false

@@ -61,5 +61,6 @@ jobs:
           git push origin HEAD:main
 
           # Los pushes hechos con GITHUB_TOKEN no disparan otros workflows de
-          # forma implícita. Inicia explícitamente la compilación de fuente.
+          # forma implícita. Inicia explícitamente las compilaciones de fuente.
           GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh workflow run build-dxdesk-app.yml --ref main
+          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh workflow run build-dxdesk-multiplatform-source.yml --ref main
