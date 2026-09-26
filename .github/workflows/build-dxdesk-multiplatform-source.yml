@@ -121,6 +121,8 @@ jobs:
         run: |
           rustup toolchain install "${RUST_VERSION}" --profile minimal
           rustup default "${RUST_VERSION}"
+          rustup component add rustfmt --toolchain "${RUST_VERSION}"
+          rustfmt --version
           cargo install cargo-ndk --version "${CARGO_NDK_VERSION}" --locked
           cargo install flutter_rust_bridge_codegen --version 1.80.1 --features uuid --locked
           dart pub global activate ffigen 8.0.2
@@ -219,7 +221,7 @@ jobs:
             libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev \
             libpulse-dev libva-dev libxcb-randr0-dev libxcb-shape0-dev \
             libxcb-xfixes0-dev libxdo-dev libxfixes-dev libunwind-dev \
-            llvm-dev nasm ninja-build pkg-config python3-pip libfuse2 libarchive-tools
+            llvm-dev nasm ninja-build pkg-config python3-pip python3-venv libfuse2 libarchive-tools
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -289,11 +291,13 @@ jobs:
         working-directory: client
         shell: bash
         run: |
-          sudo python3 -m pip install --disable-pip-version-check git+https://github.com/rustdesk-org/appimage-builder.git
-          command -v appimage-builder
+          python3 -m venv "${RUNNER_TEMP}/appimage-builder-venv"
+          "${RUNNER_TEMP}/appimage-builder-venv/bin/python" -m pip install --disable-pip-version-check --upgrade pip setuptools wheel setuptools_scm
+          "${RUNNER_TEMP}/appimage-builder-venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir git+https://github.com/rustdesk-org/appimage-builder.git
+          test -x "${RUNNER_TEMP}/appimage-builder-venv/bin/appimage-builder"
           cp rustdesk-*.deb appimage/rustdesk.deb
           pushd appimage
-          sudo appimage-builder --skip-tests --recipe ./AppImageBuilder-x86_64.yml
+          sudo "${RUNNER_TEMP}/appimage-builder-venv/bin/appimage-builder" --skip-tests --recipe ./AppImageBuilder-x86_64.yml
           appimage=$(find . -maxdepth 1 -type f -name '*.AppImage' | head -n 1)
           test -n "$appimage"
           mv "$appimage" ../DxDesk-Linux-x64.AppImage
