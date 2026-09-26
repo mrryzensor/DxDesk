@@ -48,6 +48,15 @@ vcpkg_cmake_configure(
         OPUS_DISABLE_INTRINSICS
 )
 vcpkg_cmake_install()
+
+# Opus installs these through CMake's PUBLIC_HEADER rule.  On Android with
+# the current CMake/vcpkg combination that rule can leave the static library
+# installed while omitting include/opus/*.h.  magnum-opus includes the public
+# headers directly, so make the package layout explicit for every triplet.
+file(GLOB OPUS_PUBLIC_HEADERS "${SOURCE_PATH}/include/*.h")
+file(INSTALL ${OPUS_PUBLIC_HEADERS}
+     DESTINATION "${CURRENT_PACKAGES_DIR}/include/opus")
+
 vcpkg_copy_pdbs()
 
 vcpkg_cmake_config_fixup(CONFIG_PATH lib/cmake/Opus)

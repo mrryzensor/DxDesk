@@ -106,6 +106,19 @@ jobs:
             # Invocarlos con bash evita el error 126 en runners Linux nuevos.
             bash ./client/flutter/build_android_deps.sh "$abi"
           done
+          for triplet in arm64-android arm-android x64-android; do
+            include_dir="$VCPKG_ROOT/installed/$triplet/include"
+            library="$VCPKG_ROOT/installed/$triplet/lib/libopus.a"
+            header="$include_dir/opus/opus_multistream.h"
+            if [[ ! -s "$header" || ! -s "$library" ]]; then
+              echo "Incomplete Opus package for $triplet" >&2
+              echo "Expected header: $header" >&2
+              echo "Expected library: $library" >&2
+              find "$VCPKG_ROOT/installed/$triplet" -maxdepth 3 -type f \
+                \( -name 'opus_multistream.h' -o -name 'libopus.a' \) -print >&2 || true
+              exit 1
+            fi
+          done
 
       - name: Reclaim disk space after Android native dependencies
         shell: bash
@@ -222,7 +235,7 @@ jobs:
           sudo apt-get install -y \
             clang cmake curl gcc g++ git libayatana-appindicator3-dev \
             libasound2-dev libc6-dev libclang-dev libegl-dev libgles2-mesa-dev \
-            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev libgtk-3-dev \
+            libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev gstreamer1.0-tools libgtk-3-dev \
             libpulse-dev libva-dev libxcb-randr0-dev libxcb-shape0-dev \
             libxcb-xfixes0-dev libxdo-dev libxfixes-dev libunwind-dev \
             llvm-dev nasm ninja-build pkg-config python3-pip python3-venv libfuse2 libarchive-tools
@@ -295,6 +308,7 @@ jobs:
         working-directory: client
         shell: bash
         run: |
+          set -euo pipefail
           python3 -m venv "${RUNNER_TEMP}/appimage-builder-venv"
           "${RUNNER_TEMP}/appimage-builder-venv/bin/python" -m pip install --disable-pip-version-check --upgrade pip setuptools wheel setuptools_scm
           "${RUNNER_TEMP}/appimage-builder-venv/bin/python" -m pip install --disable-pip-version-check --no-cache-dir git+https://github.com/rustdesk-org/appimage-builder.git
@@ -302,11 +316,11 @@ jobs:
           cp rustdesk-*.deb appimage/rustdesk.deb
           pushd appimage
           sudo "${RUNNER_TEMP}/appimage-builder-venv/bin/appimage-builder" --skip-tests --recipe ./AppImageBuilder-x86_64.yml
-          appimage=$(find . -maxdepth 1 -type f -name '*.AppImage' | head -n 1)
+          appimage=$(find . -maxdepth 1 -type f -name '*.AppImage' -print -quit)
           test -n "$appimage"
           mv "$appimage" ../DxDesk-Linux-x64.AppImage
           popd
-          deb=$(find . -maxdepth 1 -type f -name 'rustdesk-*.deb' | head -n 1)
+          deb=$(find . -maxdepth 1 -type f -name 'rustdesk-*.deb' -print -quit)
           test -n "$deb"
           cp "$deb" DxDesk-Linux-x64.deb
           test -s DxDesk-Linux-x64.AppImage
