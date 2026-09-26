@@ -336,7 +336,7 @@ jobs:
           fi
           cp "$deb" DxDesk-Linux-x64.deb
           test -s DxDesk-Linux-x64.AppImage
-          chmod +x DxDesk-Linux-x64.AppImage
+          sudo chmod +x DxDesk-Linux-x64.AppImage
           test -x DxDesk-Linux-x64.AppImage
           dpkg-deb --info DxDesk-Linux-x64.deb >/dev/null
           appimage_type=$(file DxDesk-Linux-x64.AppImage)
