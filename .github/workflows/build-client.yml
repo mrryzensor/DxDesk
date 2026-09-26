@@ -6,11 +6,11 @@ on:
       server_host:
         description: 'Host o IP de tu servidor (ej: dxdesk.tudominio.com o IP pública)'
         required: false
-        default: ''
+        default: '204.216.171.102'
       server_key:
         description: 'Clave Pública del servidor (id_ed25519.pub)'
         required: false
-        default: ''
+        default: 'NH9EpepEnWXY5I8r3lv2qnCNDxYucPzDtoBsK6imNcg='
 
 jobs:
   build-dxdesk-client:
@@ -44,8 +44,9 @@ jobs:
           SECRET_HOST: ${{ secrets.RENDEZVOUS_SERVER }}
           SECRET_KEY: ${{ secrets.RS_PUB_KEY }}
         run: |
-          $HostVal = if ($env:INPUT_HOST) { $env:INPUT_HOST } elseif ($env:SECRET_HOST) { $env:SECRET_HOST } else { "127.0.0.1" }
-          $KeyVal = if ($env:INPUT_KEY) { $env:INPUT_KEY } elseif ($env:SECRET_KEY) { $env:SECRET_KEY } else { "" }
+          $Branding = Get-Content "branding.json" -Raw | ConvertFrom-Json
+          $HostVal = if ($env:INPUT_HOST) { $env:INPUT_HOST } elseif ($env:SECRET_HOST) { $env:SECRET_HOST } else { $Branding.server_host }
+          $KeyVal = if ($env:INPUT_KEY) { $env:INPUT_KEY } elseif ($env:SECRET_KEY) { $env:SECRET_KEY } else { $Branding.server_key }
           Write-Host "Configurando cliente con Servidor: $HostVal"
           python client-packager/config_encoder.py "$HostVal" "$KeyVal"
 

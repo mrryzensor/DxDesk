@@ -3,7 +3,7 @@
   "publisher": "DxDesk",
   "description": "DxDesk Remote Desktop",
   "server_host": "204.216.171.102",
-  "server_key": "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=",
+  "server_key": "NH9EpepEnWXY5I8r3lv2qnCNDxYucPzDtoBsK6imNcg=",
   "upstream_repository": "https://github.com/rustdesk/rustdesk.git",
   "upstream_ref": "master"
 }

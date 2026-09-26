@@ -13,7 +13,7 @@ on:
       server_key:
         description: 'Clave Pública del servidor (id_ed25519.pub)'
         required: false
-        default: ''
+        default: 'NH9EpepEnWXY5I8r3lv2qnCNDxYucPzDtoBsK6imNcg='
 
 permissions:
   contents: write

@@ -339,6 +339,11 @@ Clave Pública: {key}
     print("="*55 + "\n")
 
 if __name__ == "__main__":
-    h = sys.argv[1] if (len(sys.argv) > 1 and sys.argv[1].strip()) else "204.216.171.102"
-    k = sys.argv[2] if (len(sys.argv) > 2 and sys.argv[2].strip()) else ""
+    branding_path = os.path.join(ROOT_DIR, "branding.json")
+    branding = {}
+    if os.path.exists(branding_path):
+        with open(branding_path, "r", encoding="utf-8") as branding_file:
+            branding = json.load(branding_file)
+    h = sys.argv[1] if (len(sys.argv) > 1 and sys.argv[1].strip()) else branding.get("server_host", "204.216.171.102")
+    k = sys.argv[2] if (len(sys.argv) > 2 and sys.argv[2].strip()) else branding.get("server_key", "")
     build_all(h, k)

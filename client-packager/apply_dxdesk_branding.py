@@ -31,7 +31,7 @@ def load_defaults() -> dict[str, str]:
         "publisher": "DxDesk",
         "description": "DxDesk Remote Desktop",
         "server_host": "204.216.171.102",
-        "server_key": "",
+        "server_key": "NH9EpepEnWXY5I8r3lv2qnCNDxYucPzDtoBsK6imNcg=",
     }
 
 
