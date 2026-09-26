@@ -210,9 +210,16 @@ jobs:
           if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
           Pop-Location
 
-          $portable = "client/libs/portable/target/release/rustdesk-portable-packer.exe"
-          if (-not (Test-Path $portable)) {
-              Write-Error "No se generó el portable packer de RustDesk"
+          # portable is a member of the client Cargo workspace, so Cargo normally
+          # writes it to client/target. Keep the package-local path as a fallback
+          # for runners or future Cargo configuration that uses a separate target.
+          $portableCandidates = @(
+              "client/target/release/rustdesk-portable-packer.exe",
+              "client/libs/portable/target/release/rustdesk-portable-packer.exe"
+          )
+          $portable = $portableCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $portable) {
+              Write-Error "No se generó el portable packer de RustDesk en ninguna ruta esperada"
               exit 1
           }
           Copy-Item $portable "dist-windows-source/DxDesk-Windows-x64.exe" -Force
