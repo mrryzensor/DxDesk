@@ -66,6 +66,22 @@ def generate_svg_wrapper(png_path: Path, svg_dest: Path) -> None:
     svg_dest.write_text(svg, encoding="utf-8")
 
 
+def generate_png_variant(source: Path, destination: Path, size: int) -> None:
+    """Create a small PNG used by native tray code from the branded square logo."""
+    if not source.exists() or not destination.parent.exists():
+        return
+    try:
+        from PIL import Image
+
+        with Image.open(source) as image:
+            resized = image.convert("RGBA").resize((size, size), Image.Resampling.LANCZOS)
+            resized.save(destination, format="PNG")
+    except ImportError:
+        # The workflows install Pillow before running this overlay. Keep a
+        # dependency-free fallback for local source preparation.
+        shutil.copyfile(source, destination)
+
+
 def copy_if_available(source: Path, destination: Path) -> bool:
     if not source.exists() or not destination.parent.exists():
         return False
@@ -173,6 +189,11 @@ def patch_branding(
         copy_if_available(ico, res_dir / "icon.ico")
         copy_if_available(ico, res_dir / "tray-icon.ico")
         copy_if_available(icns, res_dir / "AppIcon.icns")
+        # RustDesk keeps these two macOS tray templates ignored by the
+        # upstream client .gitignore. Generate them on every branded build so
+        # a clean GitHub runner cannot fail at src/tray.rs:include_bytes!.
+        generate_png_variant(logo_square, res_dir / "mac-tray-dark-x2.png", 60)
+        generate_png_variant(logo_square, res_dir / "mac-tray-light-x2.png", 48)
         if (res_dir / "logo.svg").exists():
             generate_svg_wrapper(logo_square, res_dir / "logo.svg")
         scalable_svg = res_dir / "scalable.svg"

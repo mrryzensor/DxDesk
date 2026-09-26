@@ -56,6 +56,18 @@ jobs:
             libpulse-dev libva-dev llvm-dev nasm ninja-build \
             openjdk-17-jdk-headless pkg-config wget
 
+      - name: Reclaim runner disk space before Android toolchains
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The hosted image contains unused SDKs and runtimes. Building the
+          # three Android ABIs otherwise exhausts disk before bridge generation.
+          sudo rm -rf /usr/local/lib/android/sdk/ndk/*
+          sudo rm -rf /usr/local/lib/android/sdk/system-images
+          sudo rm -rf /usr/share/dotnet /usr/local/share/powershell
+          sudo apt-get clean
+          df -h /
+
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
@@ -70,7 +82,7 @@ jobs:
           add-to-path: true
 
       - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
@@ -94,6 +106,16 @@ jobs:
             # Invocarlos con bash evita el error 126 en runners Linux nuevos.
             bash ./client/flutter/build_android_deps.sh "$abi"
           done
+
+      - name: Reclaim disk space after Android native dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep installed triplets and the vcpkg executable; remove only
+          # source/build caches that are not needed by cargo-ndk or Gradle.
+          sudo rm -rf "$VCPKG_ROOT/buildtrees" "$VCPKG_ROOT/packages" "$VCPKG_ROOT/downloads"
+          rm -rf "$GITHUB_WORKSPACE/vcpkg_cache"
+          df -h /
 
       - name: Setup Rust and bridge generators
         run: |
@@ -180,6 +202,14 @@ jobs:
           python generate_assets.py
           python client-packager/apply_dxdesk_branding.py --client-dir client
 
+      - name: Normalize Debian maintainer script permissions
+        shell: bash
+        run: |
+          chmod 755 client/res/DEBIAN/preinst \
+            client/res/DEBIAN/postinst \
+            client/res/DEBIAN/prerm \
+            client/res/DEBIAN/postrm
+
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -205,7 +235,7 @@ jobs:
           components: rustfmt
 
       - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
@@ -337,7 +367,7 @@ jobs:
           components: rustfmt
 
       - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
