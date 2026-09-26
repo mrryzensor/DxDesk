@@ -74,8 +74,9 @@ def generate_svg_wrapper(png_path: Path, svg_dest: Path) -> None:
 
 def generate_png_variant(source: Path, destination: Path, size: int) -> None:
     """Create a small PNG used by native tray code from the branded square logo."""
-    if not source.exists() or not destination.parent.exists():
+    if not source.exists():
         return
+    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         from PIL import Image
 
@@ -90,8 +91,9 @@ def generate_png_variant(source: Path, destination: Path, size: int) -> None:
 
 def generate_portable_label(source: Path, destination: Path, app_name: str) -> None:
     """Generate the small branded label embedded in the Windows portable stub."""
-    if not source.exists() or not destination.parent.exists():
+    if not source.exists():
         return
+    destination.parent.mkdir(parents=True, exist_ok=True)
     try:
         from PIL import Image, ImageDraw, ImageFont
 
@@ -124,8 +126,9 @@ def generate_portable_label(source: Path, destination: Path, app_name: str) -> N
 
 
 def copy_if_available(source: Path, destination: Path) -> bool:
-    if not source.exists() or not destination.parent.exists():
+    if not source.exists():
         return False
+    destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists() and destination.read_bytes() == source.read_bytes():
         return False
     shutil.copyfile(source, destination)
