@@ -2,7 +2,7 @@
 version: 1
 script:
  - rm -rf ./AppDir || true
- - bsdtar -zxvf rustdesk.deb
+ - bsdtar -xf rustdesk.deb
  - tar -xf ./data.tar.*
  - mkdir ./AppDir
  - mv ./usr ./AppDir/usr

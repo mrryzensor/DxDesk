@@ -64,14 +64,20 @@ jobs:
       - name: Package Release Bundle
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Path "release-bundle" -Force | Out-Null
           if (Test-Path "dist\DxDesk.exe") { Copy-Item "dist\DxDesk.exe" "release-bundle\" }
           if (Test-Path "dist\DxDesk-Setup.exe") { Copy-Item "dist\DxDesk-Setup.exe" "release-bundle\" }
           if (Test-Path "client-packager\output\RustDesk2.toml") { Copy-Item "client-packager\output\RustDesk2.toml" "release-bundle\" }
           if (Test-Path "client-packager\output\configure_client.ps1") { Copy-Item "client-packager\output\configure_client.ps1" "release-bundle\" }
+          if (-not (Test-Path "release-bundle\DxDesk.exe")) {
+              Write-Error "No se generó el ejecutable DxDesk.exe"
+              exit 1
+          }
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: DxDesk-Windows-Client
           path: release-bundle/*
+          if-no-files-found: error

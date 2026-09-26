@@ -265,7 +265,21 @@ jobs:
               & $isccPath "client-packager\inno_setup_dxdesk.iss"
               if (Test-Path "dist\DxDesk-Setup.exe") {
                   Copy-Item "dist\DxDesk-Setup.exe" "dist-windows-source\DxDesk-Windows-Setup.exe" -Force
+              } else {
+                  Write-Error "Inno Setup terminó sin generar dist\DxDesk-Setup.exe"
+                  exit 1
               }
+          } else {
+              Write-Error "Inno Setup no está disponible en el runner"
+              exit 1
+          }
+          if (-not (Test-Path "dist-windows-source\DxDesk-Windows-x64.exe")) {
+              Write-Error "Falta el ejecutable portable DxDesk-Windows-x64.exe"
+              exit 1
+          }
+          if (-not (Test-Path "dist-windows-source\DxDesk-Windows-Setup.exe")) {
+              Write-Error "Falta el instalador DxDesk-Windows-Setup.exe"
+              exit 1
           }
 
       - name: Upload Windows DxDesk Release
