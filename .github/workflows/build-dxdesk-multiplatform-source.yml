@@ -20,7 +20,10 @@ env:
   MAC_RUST_VERSION: "1.81"
   VCPKG_COMMIT_ID: "9e593bb18ea69cc5095e012465dcd675a822ed0d"
   CARGO_NDK_VERSION: "3.1.2"
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+  # The x-gha backend was removed from the pinned vcpkg revision and returns
+  # HTTP 400 on GitHub-hosted runners.  Disable binary caching rather than
+  # turning a recoverable cache miss into noisy build failures.
+  VCPKG_BINARY_SOURCES: "clear"
 
 jobs:
   build-android:
@@ -126,7 +129,8 @@ jobs:
           set -euo pipefail
           # Keep installed triplets and the vcpkg executable; remove only
           # source/build caches that are not needed by cargo-ndk or Gradle.
-          sudo rm -rf "$VCPKG_ROOT/buildtrees" "$VCPKG_ROOT/packages" "$VCPKG_ROOT/downloads"
+          sudo rm -rf "$VCPKG_ROOT/buildtrees" "$VCPKG_ROOT/packages" "$VCPKG_ROOT/downloads" \
+            "$VCPKG_ROOT/android-installed"
           rm -rf "$GITHUB_WORKSPACE/vcpkg_cache"
           df -h /
 

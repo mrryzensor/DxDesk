@@ -10,7 +10,7 @@ script:
  - for i in {32,64,128}; do mkdir -p ./AppDir/usr/share/icons/hicolor/$i\x$i/apps/; cp ../res/$i\x$i.png ./AppDir/usr/share/icons/hicolor/$i\x$i/apps/rustdesk.png; done
  - mkdir -p ./AppDir/usr/share/icons/hicolor/scalable/apps/; cp ../res/scalable.svg ./AppDir/usr/share/icons/hicolor/scalable/apps/rustdesk.svg
  # desktop file
- - install -Dm 644 ./AppDir/usr/share/rustdesk/files/rustdesk.desktop ./AppDir/usr/share/applications/rustdesk.desktop
+ - test -f ./AppDir/usr/share/applications/rustdesk.desktop
  - sed -i 's/^Icon=.*/Icon=rustdesk/' ./AppDir/usr/share/applications/rustdesk.desktop
 AppDir:
   path: ./AppDir
