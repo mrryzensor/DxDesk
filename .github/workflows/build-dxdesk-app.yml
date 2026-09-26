@@ -53,7 +53,15 @@ jobs:
 
       - name: Apply DxDesk Deep UI Branding
         run: |
-          python client-packager/apply_dxdesk_branding.py "${{ github.event.inputs.server_host || '204.216.171.102' }}" "${{ github.event.inputs.server_key || '' }}"
+          $hostInput = "${{ github.event.inputs.server_host }}"
+          $keyInput = "${{ github.event.inputs.server_key }}"
+          if ($hostInput -and $keyInput) {
+              python client-packager/apply_dxdesk_branding.py $hostInput $keyInput
+          } elseif ($hostInput) {
+              python client-packager/apply_dxdesk_branding.py $hostInput
+          } else {
+              python client-packager/apply_dxdesk_branding.py
+          }
 
       - name: Setup Rust Toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -141,8 +149,14 @@ jobs:
       - name: Build Rust Core Library
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
+          cd client/libs/virtual_display/dylib
+          cargo build --locked --release
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          cd ../../../..
           cd client
           cargo build --features flutter --lib --release
+          if ($LASTEXITCODE -ne 0) { exit 1 }
           if (Test-Path "target/release/librustdesk.dll") {
               Write-Host "SUCCESS: target/release/librustdesk.dll compiled successfully!"
           } else {
@@ -156,9 +170,10 @@ jobs:
           cd client/flutter
           flutter build windows --release
 
-      - name: Package Windows Artifacts
+      - name: Build branded Windows portable executable
         shell: pwsh
         run: |
+          $ErrorActionPreference = "Stop"
           New-Item -ItemType Directory -Path "dist-windows-source" -Force | Out-Null
           if (Test-Path "client/flutter/build/windows/x64/runner/Release") {
               Copy-Item "client/flutter/build/windows/x64/runner/Release/*" "dist-windows-source/" -Recurse -Force
@@ -171,9 +186,46 @@ jobs:
           if (Test-Path "client/target/release/deps/dylib_virtual_display.dll") {
               Copy-Item "client/target/release/deps/dylib_virtual_display.dll" "dist-windows-source/" -Force
           }
-          if (Test-Path "dist-windows-source/rustdesk.exe") {
-              Copy-Item "dist-windows-source/rustdesk.exe" "dist-windows-source/DxDesk.exe" -Force
+          if (-not (Test-Path "dist-windows-source/rustdesk.exe")) {
+              Write-Error "Flutter no generó rustdesk.exe"
+              exit 1
           }
+
+          # RustDesk/Flutter genera una carpeta con DLL y assets. El portable
+          # packer convierte esa carpeta en un único ejecutable autónomo.
+          $releaseDir = (Resolve-Path "dist-windows-source").Path
+          $startupExe = Join-Path $releaseDir "rustdesk.exe"
+          Push-Location "client/libs/portable"
+          python generate.py --folder $releaseDir --output (Get-Location).Path --executable $startupExe
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
+          cargo build --locked --release
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit 1 }
+          Pop-Location
+
+          $portable = "client/libs/portable/target/release/rustdesk-portable-packer.exe"
+          if (-not (Test-Path $portable)) {
+              Write-Error "No se generó el portable packer de RustDesk"
+              exit 1
+          }
+          Copy-Item $portable "dist-windows-source/DxDesk-Windows-x64.exe" -Force
+          Copy-Item "assets/dxdesk.ico" "dist-windows-source/" -Force
+
+          # Refuerza los metadatos del PE final, que es el archivo que se
+          # descargará directamente desde GitHub Releases.
+          $rcedit = "client-packager/tools/rcedit-x64.exe"
+          New-Item -ItemType Directory -Path "client-packager/tools" -Force | Out-Null
+          if (-not (Test-Path $rcedit)) {
+              Invoke-WebRequest "https://github.com/electron/rcedit/releases/download/v2.0.0/rcedit-x64.exe" -OutFile $rcedit
+          }
+          & $rcedit "dist-windows-source/DxDesk-Windows-x64.exe" `
+            --set-icon "assets/dxdesk.ico" `
+            --set-version-string ProductName "DxDesk" `
+            --set-version-string FileDescription "DxDesk Remote Desktop" `
+            --set-version-string CompanyName "DxDesk"
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+          # Conserva el bundle completo para depuración y compatibilidad, pero
+          # ya no se publica como si fuera el ejecutable portable.
           Copy-Item "assets/dxdesk.ico" "dist-windows-source/" -Force
           Compress-Archive -Path "dist-windows-source/*" -DestinationPath "DxDesk-Windows-x64-Source.zip" -Force
           Copy-Item "DxDesk-Windows-x64-Source.zip" "dist-windows-source/" -Force
@@ -188,21 +240,25 @@ jobs:
           }
           New-Item -ItemType Directory -Path "dist" -Force | Out-Null
           New-Item -ItemType Directory -Path "client-packager\output" -Force | Out-Null
+          $branding = Get-Content "branding.json" -Raw | ConvertFrom-Json
+          $serverHostInput = "${{ github.event.inputs.server_host }}"
+          $serverKeyInput = "${{ github.event.inputs.server_key }}"
+          $serverHost = if ($serverHostInput) { $serverHostInput } else { $branding.server_host }
+          $serverKey = if ($serverKeyInput) { $serverKeyInput } else { $branding.server_key }
           
           @"
-          custom-rendezvous-server = '204.216.171.102'
-          key = ''
-          relay-server = '204.216.171.102'
+          custom-rendezvous-server = '$serverHost'
+          key = '$serverKey'
+          relay-server = '$serverHost'
           api-server = ''
           "@ | Set-Content -Path "client-packager\output\RustDesk2.toml" -Encoding UTF8
           
-          Copy-Item "dist-windows-source\DxDesk.exe" "dist\DxDesk.exe" -Force
+          Copy-Item "dist-windows-source\DxDesk-Windows-x64.exe" "dist\DxDesk.exe" -Force
           if (Test-Path $isccPath) {
               Write-Host "Compilando instalador oficial DxDesk-Windows-Setup.exe..."
               & $isccPath "client-packager\inno_setup_dxdesk.iss"
               if (Test-Path "dist\DxDesk-Setup.exe") {
                   Copy-Item "dist\DxDesk-Setup.exe" "dist-windows-source\DxDesk-Windows-Setup.exe" -Force
-                  Copy-Item "dist\DxDesk-Setup.exe" "dist-windows-source\DxDesk-Setup.exe" -Force
               }
           }
 
@@ -212,13 +268,35 @@ jobs:
           name: DxDesk-Windows-Source-Release
           path: dist-windows-source/*
 
+      - name: Determine release identity
+        id: release
+        shell: pwsh
+        run: |
+          $cargo = Get-Content "client/Cargo.toml" -Raw
+          $versionMatch = [regex]::Match($cargo, '(?m)^version\s*=\s*"([^"]+)"')
+          $version = if ($versionMatch.Success) { $versionMatch.Groups[1].Value } else { "source" }
+          $sha = "${{ github.sha }}"
+          if (Test-Path ".upstream-rustdesk.json") {
+              $state = Get-Content ".upstream-rustdesk.json" -Raw | ConvertFrom-Json
+              if ($state.commit) { $sha = $state.commit }
+          }
+          $tag = "v$version-main.$($sha.Substring(0, 12))"
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
       - name: Publish Official 100% Branded Windows Client to GitHub Releases
         uses: softprops/action-gh-release@v2
         if: success()
         with:
-          tag_name: "v1.4.9"
-          name: "DxDesk v1.4.9 (Descargas Directas Sin ZIP)"
+          tag_name: ${{ steps.release.outputs.tag }}
+          name: "DxDesk ${{ steps.release.outputs.version }} (RustDesk main)"
+          body: |
+            Cliente Windows de DxDesk compilado desde RustDesk upstream.
+
+            - Ejecutable portable de un solo archivo: `DxDesk-Windows-x64.exe`
+            - Instalador: `DxDesk-Windows-Setup.exe`
+            - Bundle completo para diagnóstico: `DxDesk-Windows-x64-Source.zip`
           files: |
             dist-windows-source/DxDesk-Windows-Setup.exe
             dist-windows-source/DxDesk-Windows-x64-Source.zip
-            dist-windows-source/DxDesk.exe
+            dist-windows-source/DxDesk-Windows-x64.exe

@@ -1,0 +1,65 @@
+name: Sync RustDesk upstream
+
+on:
+  schedule:
+    # RustDesk main is checked once per day. A commit is created only when the
+    # upstream revision changed, which then starts the branded build workflow.
+    - cron: "15 4 * * *"
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "Rama de RustDesk que se desea sincronizar"
+        required: false
+        default: "master"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: sync-rustdesk-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout DxDesk
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install asset generator dependency
+        run: python -m pip install --upgrade pillow
+
+      - name: Generate branding assets
+        run: python generate_assets.py
+
+      - name: Sync and brand RustDesk source
+        env:
+          UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'master' }}
+        run: python scripts/sync_rustdesk.py --ref "$UPSTREAM_REF"
+
+      - name: Commit upstream update
+        shell: bash
+        run: |
+          if git diff --quiet -- client .upstream-rustdesk.json; then
+            echo "RustDesk upstream no ha cambiado."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A client .upstream-rustdesk.json
+          upstream_sha=$(python -c "import json; print(json.load(open('.upstream-rustdesk.json', encoding='utf-8'))['commit'][:12])")
+          git commit -m "chore: sync RustDesk upstream ${upstream_sha}"
+          git push origin HEAD:main
+
+          # Los pushes hechos con GITHUB_TOKEN no disparan otros workflows de
+          # forma implícita. Inicia explícitamente la compilación de fuente.
+          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh workflow run build-dxdesk-app.yml --ref main

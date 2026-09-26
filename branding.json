@@ -1,0 +1,9 @@
+{
+  "app_name": "DxDesk",
+  "publisher": "DxDesk",
+  "description": "DxDesk Remote Desktop",
+  "server_host": "204.216.171.102",
+  "server_key": "OeVuKk5nlHiXp+APNn0Y3pC1Iwpwn44JGqrQCsWqmBw=",
+  "upstream_repository": "https://github.com/rustdesk/rustdesk.git",
+  "upstream_ref": "master"
+}

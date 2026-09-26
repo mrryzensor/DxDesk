@@ -11,12 +11,6 @@ on:
         description: 'Clave Pública del servidor (id_ed25519.pub)'
         required: false
         default: ''
-  push:
-    branches: [ main, master ]
-    paths-ignore:
-      - 'README.md'
-      - 'server/**'
-      - '.gitignore'
 
 jobs:
   build-dxdesk-client:

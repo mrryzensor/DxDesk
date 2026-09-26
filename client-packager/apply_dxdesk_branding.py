@@ -1,154 +1,296 @@
 #!/usr/bin/env python3
-"""
-DxDesk - Aplicador de Marca Total sobre client/
-Aplica el logo, iconos, nombres y servidor en todo el código fuente:
-- Flutter UI (iconos, logos, appName, pantallas y diálogos)
-- Rust Core (libs/hbb_common/src/config.rs, src/common.rs)
-- Windows Runner (main.cpp, Runner.rc, app_icon.ico)
-- Linux / Android / macOS assets
+"""Apply the DxDesk branding overlay to a RustDesk source checkout.
+
+The overlay is intentionally kept outside the RustDesk source tree. This lets
+the source checkout be replaced by a newer upstream revision without manually
+merging branding changes into RustDesk files.
 """
 
-import os
-import shutil
-import re
-import sys
+from __future__ import annotations
+
+import argparse
 import base64
+import json
+import re
+import shutil
+from pathlib import Path
 
-ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CLIENT_DIR = os.path.join(ROOT_DIR, "client")
-ASSETS_DIR = os.path.join(ROOT_DIR, "assets")
 
-def generate_svg_wrapper(png_path: str, svg_dest: str):
-    """Genera un archivo SVG que incrusta el PNG en base64 para reemplazar los SVGs de RustDesk."""
-    with open(png_path, "rb") as f:
-        b64 = base64.b64encode(f.read()).decode("utf-8")
-    svg_content = f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <image href="data:image/png;base64,{b64}" width="512" height="512"/>
-</svg>'''
-    with open(svg_dest, "w", encoding="utf-8") as f:
-        f.write(svg_content)
+ROOT_DIR = Path(__file__).resolve().parents[1]
+CLIENT_DIR = ROOT_DIR / "client"
+ASSETS_DIR = ROOT_DIR / "assets"
+BRANDING_FILE = ROOT_DIR / "branding.json"
 
-def apply_branding(app_name="DxDesk", host="204.216.171.102", key=""):
-    print(f"\n=======================================================")
-    print(f"  Aplicando Marca Profunda '{app_name}' en client/")
-    print(f"  Servidor predeterminado: {host}")
-    print(f"=======================================================\n")
 
-    ico_path = os.path.join(ASSETS_DIR, "dxdesk.ico")
-    logo_square = os.path.join(ASSETS_DIR, "logo_square.png")
-    icon_128 = os.path.join(ASSETS_DIR, "icons", "icon_128x128.png")
-    icon_64 = os.path.join(ASSETS_DIR, "icons", "icon_64x64.png")
-    icon_32 = os.path.join(ASSETS_DIR, "icons", "icon_32x32.png")
+def load_defaults() -> dict[str, str]:
+    if BRANDING_FILE.exists():
+        with BRANDING_FILE.open("r", encoding="utf-8") as handle:
+            return json.load(handle)
+    return {
+        "app_name": "DxDesk",
+        "publisher": "DxDesk",
+        "description": "DxDesk Remote Desktop",
+        "server_host": "204.216.171.102",
+        "server_key": "",
+    }
 
-    # 1. Modificar libs/hbb_common/src/config.rs
-    config_rs = os.path.join(CLIENT_DIR, "libs", "hbb_common", "src", "config.rs")
-    if os.path.exists(config_rs):
-        print("[1/5] Modificando libs/hbb_common/src/config.rs...")
-        with open(config_rs, "r", encoding="utf-8") as f:
-            c = f.read()
 
-        # APP_NAME
-        c = re.sub(
-            r'pub static ref APP_NAME: RwLock<String> = RwLock::new\("[^"]+"\..*?\);',
-            f'pub static ref APP_NAME: RwLock<String> = RwLock::new("{app_name}".to_owned());',
-            c
+def read_text(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    return path.read_text(encoding="utf-8")
+
+
+def write_if_changed(path: Path, content: str) -> bool:
+    if path.read_text(encoding="utf-8") == content:
+        return False
+    path.write_text(content, encoding="utf-8", newline="")
+    return True
+
+
+def replace_in_file(path: Path, transform) -> bool:
+    content = read_text(path)
+    if content is None:
+        return False
+    updated = transform(content)
+    return updated != content and write_if_changed(path, updated)
+
+
+def generate_svg_wrapper(png_path: Path, svg_dest: Path) -> None:
+    encoded = base64.b64encode(png_path.read_bytes()).decode("ascii")
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" '
+        f'width="100%" height="100%"><image href="data:image/png;base64,{encoded}" '
+        'width="512" height="512"/></svg>'
+    )
+    svg_dest.write_text(svg, encoding="utf-8")
+
+
+def copy_if_available(source: Path, destination: Path) -> bool:
+    if not source.exists() or not destination.parent.exists():
+        return False
+    if destination.exists() and destination.read_bytes() == source.read_bytes():
+        return False
+    shutil.copyfile(source, destination)
+    return True
+
+
+def patch_branding(
+    client_dir: Path,
+    app_name: str,
+    publisher: str,
+    description: str,
+    host: str,
+    key: str,
+) -> None:
+    print(f"Aplicando la marca {app_name} en {client_dir}")
+
+    config_rs = client_dir / "libs" / "hbb_common" / "src" / "config.rs"
+
+    def patch_config(content: str) -> str:
+        def app_name_replacement(match: re.Match[str]) -> str:
+            original = match.group(0)
+            if "static ref" in original:
+                return f'    pub static ref APP_NAME: RwLock<String> = RwLock::new("{app_name}".to_owned());'
+            return f'pub const APP_NAME: &str = "{app_name}";'
+
+        content = re.sub(
+            r"(?m)^\s*pub\s+(?:static ref|const)\s+APP_NAME[^;]*;",
+            app_name_replacement,
+            content,
+            count=1,
         )
-        
-        # Servidor por defecto
-        c = re.sub(
-            r'pub const RENDEZVOUS_SERVERS: &\[&str\] = &\[[^\]]*\];',
+        content = re.sub(
+            r"(?m)^\s*pub const RENDEZVOUS_SERVERS: &\[&str\] = &\[[^;]*;",
             f'pub const RENDEZVOUS_SERVERS: &[&str] = &["{host}"];',
-            c
+            content,
+            count=1,
         )
         if key:
-            c = re.sub(
-                r'pub const RS_PUB_KEY: &str = "[^"]*";',
+            content = re.sub(
+                r'(?m)^\s*pub const RS_PUB_KEY: &str = "[^"]*";',
                 f'pub const RS_PUB_KEY: &str = "{key}";',
-                c
+                content,
+                count=1,
             )
+        return content
 
-        with open(config_rs, "w", encoding="utf-8") as f:
-            f.write(c)
-        print("  -> APP_NAME y RENDEZVOUS_SERVERS configurados.")
+    replace_in_file(config_rs, patch_config)
 
-    # 2. Modificar src/common.rs
-    common_rs = os.path.join(CLIENT_DIR, "src", "common.rs")
-    if os.path.exists(common_rs):
-        print("[2/5] Modificando src/common.rs (get_app_name)...")
-        with open(common_rs, "r", encoding="utf-8") as f:
-            c = f.read()
-        c = re.sub(
-            r'pub fn get_app_name\(\) -> String \{[^}]*\}',
-            f'pub fn get_app_name() -> String {{\n    "{app_name}".to_string()\n}}',
-            c
+    common_rs = client_dir / "src" / "common.rs"
+
+    def patch_common(content: str) -> str:
+        return re.sub(
+            r"(?s)(pub fn get_app_name\(\) -> String \{).*?(\n\})",
+            lambda match: f'{match.group(1)}\n    "{app_name}".to_string(){match.group(2)}',
+            content,
+            count=1,
         )
-        with open(common_rs, "w", encoding="utf-8") as f:
-            f.write(c)
-        print("  -> get_app_name() forzado a devolver DxDesk.")
 
-    # 3. Modificar flutter/lib/common.dart
-    common_dart = os.path.join(CLIENT_DIR, "flutter", "lib", "common.dart")
-    if os.path.exists(common_dart):
-        print("[3/5] Modificando flutter/lib/common.dart (appName getter)...")
-        with open(common_dart, "r", encoding="utf-8") as f:
-            dart = f.read()
-        # Forzar getter appName
-        dart = re.sub(
-            r'String get appName \{[^}]*return _appName;\s*\}',
+    replace_in_file(common_rs, patch_common)
+
+    common_dart = client_dir / "flutter" / "lib" / "common.dart"
+
+    def patch_dart(content: str) -> str:
+        return re.sub(
+            r"(?s)String get appName\s*\{.*?\n\}",
             f'String get appName => "{app_name}";',
-            dart
+            content,
+            count=1,
         )
-        with open(common_dart, "w", encoding="utf-8") as f:
-            f.write(dart)
-        print("  -> Flutter appName getter actualizado a DxDesk.")
 
-    # 4. Reemplazar logos e iconos en flutter/assets/
-    flutter_assets = os.path.join(CLIENT_DIR, "flutter", "assets")
-    if os.path.exists(flutter_assets):
-        print("[4/5] Reemplazando imágenes de la interfaz en flutter/assets/...")
-        for name in ["logo.png", "logo_light.png", "logo_dark.png", "icon.png"]:
-            shutil.copyfile(logo_square, os.path.join(flutter_assets, name))
-        generate_svg_wrapper(logo_square, os.path.join(flutter_assets, "logo.svg"))
-        print("  -> Todos los logos de la ventana de Flutter reemplazados por tu logo.")
+    replace_in_file(common_dart, patch_dart)
 
-    # 5. Modificar Runner de Windows (barra de título y metadatos)
-    print("[5/5] Actualizando Runner de Windows...")
-    win_res = os.path.join(CLIENT_DIR, "flutter", "windows", "runner", "resources")
-    if os.path.exists(win_res) and os.path.exists(ico_path):
-        shutil.copyfile(ico_path, os.path.join(win_res, "app_icon.ico"))
-        
-    main_cpp = os.path.join(CLIENT_DIR, "flutter", "windows", "runner", "main.cpp")
-    if os.path.exists(main_cpp):
-        with open(main_cpp, "r", encoding="utf-8") as f:
-            cpp = f.read()
-        cpp = re.sub(r'CreateAndShow\(L"[^"]+"', f'CreateAndShow(L"{app_name}"', cpp)
-        with open(main_cpp, "w", encoding="utf-8") as f:
-            f.write(cpp)
+    # Assets used by Flutter, the native runners and Linux package builders.
+    logo_square = ASSETS_DIR / "logo_square.png"
+    icon_32 = ASSETS_DIR / "icons" / "icon_32x32.png"
+    icon_64 = ASSETS_DIR / "icons" / "icon_64x64.png"
+    icon_128 = ASSETS_DIR / "icons" / "icon_128x128.png"
+    icon_256 = ASSETS_DIR / "icons" / "icon_256x256.png"
+    ico = ASSETS_DIR / "dxdesk.ico"
+    icns = ASSETS_DIR / "dxdesk.icns"
 
-    runner_rc = os.path.join(CLIENT_DIR, "flutter", "windows", "runner", "Runner.rc")
-    if os.path.exists(runner_rc):
-        with open(runner_rc, "r", encoding="utf-8") as f:
-            rc = f.read()
-        rc = rc.replace("RustDesk", app_name)
-        with open(runner_rc, "w", encoding="utf-8") as f:
-            f.write(rc)
+    flutter_assets = client_dir / "flutter" / "assets"
+    if logo_square.exists() and flutter_assets.exists():
+        for name in ("logo.png", "logo_light.png", "logo_dark.png", "icon.png"):
+            copy_if_available(logo_square, flutter_assets / name)
+        if (flutter_assets / "logo.svg").exists():
+            generate_svg_wrapper(logo_square, flutter_assets / "logo.svg")
 
-    # 6. Reemplazar en res/
-    res_dir = os.path.join(CLIENT_DIR, "res")
-    if os.path.exists(res_dir):
-        if os.path.exists(ico_path):
-            shutil.copyfile(ico_path, os.path.join(res_dir, "icon.ico"))
-        shutil.copyfile(logo_square, os.path.join(res_dir, "128x128@2x.png"))
-        if os.path.exists(icon_32):
-            shutil.copyfile(icon_32, os.path.join(res_dir, "32x32.png"))
-        shutil.copyfile(logo_square, os.path.join(res_dir, "logo.png"))
-        generate_svg_wrapper(logo_square, os.path.join(res_dir, "logo.svg"))
+    res_dir = client_dir / "res"
+    if logo_square.exists() and res_dir.exists():
+        for name in ("logo.png", "128x128@2x.png", "icon.png", "mac-icon.png"):
+            copy_if_available(logo_square, res_dir / name)
+        copy_if_available(icon_32, res_dir / "32x32.png")
+        copy_if_available(ico, res_dir / "icon.ico")
+        copy_if_available(ico, res_dir / "tray-icon.ico")
+        if (res_dir / "logo.svg").exists():
+            generate_svg_wrapper(logo_square, res_dir / "logo.svg")
 
-    print("\n" + "="*55)
-    print(f"  ¡MARCA '{app_name}' APLICADA AL 100% EN TODO EL CÓDIGO!")
-    print("="*55 + "\n")
+    windows_resources = client_dir / "flutter" / "windows" / "runner" / "resources"
+    copy_if_available(ico, windows_resources / "app_icon.ico")
+    copy_if_available(icns, client_dir / "flutter" / "macos" / "Runner" / "AppIcon.icns")
+
+    def patch_runner_rc(content: str) -> str:
+        def replace_value(match: re.Match[str]) -> str:
+            field = match.group(1)
+            value = {
+                "CompanyName": publisher,
+                "FileDescription": description,
+                "ProductName": app_name,
+            }[field]
+            return f'            VALUE "{field}", "{value}" "\\0"'
+
+        return re.sub(
+            r'(?m)^\s*VALUE "(CompanyName|FileDescription|ProductName)",.*$',
+            replace_value,
+            content,
+        )
+
+    runner_rc = client_dir / "flutter" / "windows" / "runner" / "Runner.rc"
+    replace_in_file(runner_rc, patch_runner_rc)
+    main_cpp = client_dir / "flutter" / "windows" / "runner" / "main.cpp"
+    replace_in_file(
+        main_cpp,
+        lambda text: re.sub(
+            r'CreateAndShow\(L"[^"]+"',
+            f'CreateAndShow(L"{app_name}"',
+            text,
+        ),
+    )
+
+    cargo_toml = client_dir / "Cargo.toml"
+
+    def patch_cargo(content: str) -> str:
+        content = re.sub(
+            r'(?m)^description\s*=\s*"[^"]*"',
+            f'description = "{description}"',
+            content,
+            count=1,
+        )
+        content = re.sub(
+            r'(?m)^ProductName\s*=\s*"[^"]*"',
+            f'ProductName = "{app_name}"',
+            content,
+            count=1,
+        )
+        content = re.sub(
+            r'(?m)^FileDescription\s*=\s*"[^"]*"',
+            f'FileDescription = "{description}"',
+            content,
+            count=1,
+        )
+        content = re.sub(
+            r'(?m)^LegalCopyright\s*=\s*"[^"]*"',
+            f'LegalCopyright = "Copyright © 2026 {publisher}"',
+            content,
+            count=1,
+        )
+        return content
+
+    replace_in_file(cargo_toml, patch_cargo)
+
+    # Android, iOS, macOS and Linux visible labels. Internal protocol names,
+    # package IDs and URI schemes intentionally remain RustDesk-compatible.
+    strings_xml = client_dir / "flutter" / "android" / "app" / "src" / "main" / "res" / "values" / "strings.xml"
+    replace_in_file(strings_xml, lambda text: text.replace("RustDesk", app_name))
+    manifest = client_dir / "flutter" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
+    replace_in_file(
+        manifest,
+        lambda text: re.sub(r'android:label="RustDesk"', f'android:label="{app_name}"', text),
+    )
+    ios_plist = client_dir / "flutter" / "ios" / "Runner" / "Info.plist"
+    replace_in_file(ios_plist, lambda text: text.replace(">RustDesk<", f">{app_name}<"))
+    mac_xcconfig = client_dir / "flutter" / "macos" / "Runner" / "Configs" / "AppInfo.xcconfig"
+    replace_in_file(
+        mac_xcconfig,
+        lambda text: re.sub(r'(?m)^PRODUCT_NAME\s*=.*$', f'PRODUCT_NAME = {app_name}', text),
+    )
+    linux_app = client_dir / "flutter" / "linux" / "my_application.cc"
+    replace_in_file(
+        linux_app,
+        lambda text: text.replace(
+            'set_title(header_bar, "rustdesk")',
+            f'set_title(header_bar, "{app_name}")',
+        ).replace(
+            'set_title(window, "rustdesk")',
+            f'set_title(window, "{app_name}")',
+        ),
+    )
+
+    # Source icon directories generated by flutter_launcher_icons.
+    mipmap_sizes = {
+        "mipmap-mdpi": icon_32,
+        "mipmap-hdpi": icon_64,
+        "mipmap-xhdpi": icon_128,
+        "mipmap-xxhdpi": icon_256,
+        "mipmap-xxxhdpi": icon_256,
+    }
+    android_res = client_dir / "flutter" / "android" / "app" / "src" / "main" / "res"
+    for directory, source in mipmap_sizes.items():
+        if source.exists():
+            for candidate in android_res.glob(f"{directory}*/ic_launcher*.png"):
+                copy_if_available(source, candidate)
+
+    print("Marca y recursos aplicados correctamente.")
+
+
+def main() -> None:
+    defaults = load_defaults()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("host", nargs="?", default=defaults["server_host"])
+    parser.add_argument("key", nargs="?", default=defaults.get("server_key", ""))
+    parser.add_argument("--client-dir", type=Path, default=CLIENT_DIR)
+    args = parser.parse_args()
+    patch_branding(
+        args.client_dir.resolve(),
+        defaults.get("app_name", "DxDesk"),
+        defaults.get("publisher", "DxDesk"),
+        defaults.get("description", "DxDesk Remote Desktop"),
+        args.host,
+        args.key,
+    )
+
 
 if __name__ == "__main__":
-    h = sys.argv[1] if len(sys.argv) > 1 else "204.216.171.102"
-    k = sys.argv[2] if len(sys.argv) > 2 else ""
-    apply_branding(app_name="DxDesk", host=h, key=k)
+    main()
