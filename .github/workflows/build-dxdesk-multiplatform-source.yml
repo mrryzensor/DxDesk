@@ -321,16 +321,27 @@ jobs:
           pushd appimage
           sudo "${RUNNER_TEMP}/appimage-builder-venv/bin/appimage-builder" --skip-tests --recipe ./AppImageBuilder-x86_64.yml
           appimage=$(find . -maxdepth 1 -type f -name '*.AppImage' -print -quit)
-          test -n "$appimage"
+          if [[ -z "$appimage" ]]; then
+            echo "AppImage Builder finished without an AppImage file" >&2
+            find . -maxdepth 2 -type f -printf '%p\n' >&2
+            exit 1
+          fi
           mv "$appimage" ../DxDesk-Linux-x64.AppImage
           popd
           deb=$(find . -maxdepth 1 -type f -name 'rustdesk-*.deb' -print -quit)
-          test -n "$deb"
+          if [[ -z "$deb" ]]; then
+            echo "Debian builder output is missing" >&2
+            find . -maxdepth 1 -type f -printf '%p\n' >&2
+            exit 1
+          fi
           cp "$deb" DxDesk-Linux-x64.deb
           test -s DxDesk-Linux-x64.AppImage
+          chmod +x DxDesk-Linux-x64.AppImage
           test -x DxDesk-Linux-x64.AppImage
           dpkg-deb --info DxDesk-Linux-x64.deb >/dev/null
-          file DxDesk-Linux-x64.AppImage | grep -q 'ELF'
+          appimage_type=$(file DxDesk-Linux-x64.AppImage)
+          echo "$appimage_type"
+          grep -qi 'ELF' <<< "$appimage_type"
 
       - name: Upload source-built Linux packages
         uses: actions/upload-artifact@v4
