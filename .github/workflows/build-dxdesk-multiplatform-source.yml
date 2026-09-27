@@ -460,11 +460,29 @@ jobs:
         working-directory: client
         shell: bash
         run: |
+          set -euo pipefail
           if [ "${{ matrix.arch }}" = "AppleSilicon" ]; then
-            python3 build.py --flutter --hwcodec --unix-file-copy-paste --screencapturekit
+            build_args=(--flutter --hwcodec --unix-file-copy-paste --screencapturekit)
           else
-            python3 build.py --flutter --hwcodec --unix-file-copy-paste
+            build_args=(--flutter --hwcodec --unix-file-copy-paste)
           fi
+
+          # CocoaPods downloads its CDN index during `flutter build macos`.
+          # GitHub-hosted macOS runners occasionally lose DNS for the CDN;
+          # retry the complete build so a transient network failure does not
+          # invalidate an otherwise healthy source build.
+          for attempt in 1 2 3; do
+            if python3 build.py "${build_args[@]}"; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "macOS build failed after 3 attempts" >&2
+              exit 1
+            fi
+            delay=$((attempt * 30))
+            echo "macOS build failed; retrying in ${delay}s..." >&2
+            sleep "$delay"
+          done
           app="flutter/build/macos/Build/Products/Release/DxDesk.app"
           test -d "$app"
           create-dmg \
