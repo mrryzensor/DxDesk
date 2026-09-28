@@ -33,10 +33,12 @@ fn dxdesk_update_asset_name() -> Option<&'static str> {
     #[allow(unreachable_code)]
     None
 }
+fn normalize_dxdesk_release_tag(value: &str) -> &str {
+    value.strip_prefix("source-").unwrap_or(value)
+}
 fn dxdesk_release_is_newer(tag: &str) -> bool {
     if let Some(current_tag) = option_env!("DXDESK_BUILD_TAG").filter(|tag| !tag.is_empty()) {
-        let normalize = |value: &str| value.strip_prefix("source-").unwrap_or(value);
-        return normalize(tag) != normalize(current_tag);
+        return normalize_dxdesk_release_tag(tag) != normalize_dxdesk_release_tag(current_tag);
     }
     get_version_number(tag) > get_version_number(crate::VERSION)
 }
