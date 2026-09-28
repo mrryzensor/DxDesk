@@ -22,7 +22,9 @@ SetupIconFile=..\assets\dxdesk.ico
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
-PrivilegesRequired=lowest
+; DxDesk's Windows client reads the machine-wide Inno uninstall key to detect
+; that this is an installed copy and to enable service/UAC integration.
+PrivilegesRequired=admin
 
 [Languages]
 Name: "spanish"; MessagesFile: "compiler:Languages\Spanish.isl"

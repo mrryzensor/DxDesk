@@ -1297,7 +1297,10 @@ pub fn lock_screen() {
     }
 }
 
-const IS1: &str = "{54E86BC2-6C85-41F3-A9EB-1A94AC9B1F93}_is1";
+// Must match client-packager/inno_setup_dxdesk.iss. Inno Setup records the
+// installed location under this uninstall key, which is how the client
+// recognizes a DxDesk installation instead of showing the Install card again.
+const IS1: &str = "{E380B41C-8D57-48BC-96E6-8E383845496B}_is1";
 
 fn get_subkey(name: &str, wow: bool) -> String {
     let tmp = format!(

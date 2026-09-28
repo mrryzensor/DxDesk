@@ -2728,6 +2728,12 @@ pub fn main_get_common(key: String) -> String {
                 }
             }
         } else if key.starts_with("download-file-") {
+            if key == "download-file-custom" {
+                return crate::common::SOFTWARE_UPDATE_DOWNLOAD_URL
+                    .lock()
+                    .unwrap()
+                    .clone();
+            }
             let _version = key.replace("download-file-", "");
             #[cfg(target_os = "windows")]
             return match (

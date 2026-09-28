@@ -11,18 +11,23 @@ final _isExtracting = false.obs;
 
 void handleUpdate(String releasePageUrl) {
   _isExtracting.value = false;
-  String downloadUrl = releasePageUrl.replaceAll('tag', 'download');
-  String version = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
-  final String downloadFile =
-      bind.mainGetCommonSync(key: 'download-file-$version');
+  String downloadUrl;
+  String downloadFile;
+  if (bind.isCustomClient()) {
+    downloadUrl = bind.mainGetCommonSync(key: 'download-file-custom');
+    downloadFile = downloadUrl;
+  } else {
+    downloadUrl = releasePageUrl.replaceAll('tag', 'download');
+    String version = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
+    downloadFile = bind.mainGetCommonSync(key: 'download-file-$version');
+    downloadUrl = '$downloadUrl/$downloadFile';
+  }
   if (downloadFile.startsWith('error:')) {
     final error = downloadFile.replaceFirst('error:', '');
     msgBox(gFFI.sessionId, 'custom-nocancel-nook-hasclose', 'Error', error,
         releasePageUrl, gFFI.dialogManager);
     return;
   }
-  downloadUrl = '$downloadUrl/$downloadFile';
-
   SimpleWrapper downloadId = SimpleWrapper('');
   SimpleWrapper<VoidCallback> onCanceled = SimpleWrapper(() {});
   gFFI.dialogManager.dismissAll();

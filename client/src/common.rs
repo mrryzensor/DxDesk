@@ -93,6 +93,9 @@ pub mod input {
 
 lazy_static::lazy_static! {
     pub static ref SOFTWARE_UPDATE_URL: Arc<Mutex<String>> = Default::default();
+    /// Direct asset URL for the branded updater. The release page URL above is
+    /// kept separately because the UI uses it as the changelog/fallback link.
+    pub static ref SOFTWARE_UPDATE_DOWNLOAD_URL: Arc<Mutex<String>> = Default::default();
     pub static ref DEVICE_ID: Arc<Mutex<String>> = Default::default();
     pub static ref DEVICE_NAME: Arc<Mutex<String>> = Default::default();
     static ref PUBLIC_IPV6_ADDR: Arc<Mutex<(Option<SocketAddr>, Option<Instant>)>> = Default::default();
@@ -1018,19 +1021,149 @@ pub fn is_modifier(evt: &KeyEvent) -> bool {
 }
 
 pub fn check_software_update() {
-    if is_custom_client() {
-        return;
-    }
     let opt = LocalConfig::get_option(keys::OPTION_ENABLE_CHECK_UPDATE);
     if config::option2bool(keys::OPTION_ENABLE_CHECK_UPDATE, &opt) {
         std::thread::spawn(move || allow_err!(do_check_software_update()));
     }
 }
 
+const DXDESK_GITHUB_RELEASES_API: &str =
+    "https://api.github.com/repos/mrryzensor/DxDesk/releases?per_page=20";
+
+fn dxdesk_update_asset_name() -> Option<&'static str> {
+    #[cfg(target_os = "windows")]
+    return Some("DxDesk-Windows-x64.exe");
+    #[cfg(target_os = "linux")]
+    return Some("DxDesk-Linux-x64.AppImage");
+    #[cfg(target_os = "macos")]
+    return Some(if std::env::consts::ARCH == "aarch64" {
+        "DxDesk-macOS-AppleSilicon.dmg"
+    } else {
+        "DxDesk-macOS-Intel.dmg"
+    });
+    #[cfg(target_os = "android")]
+    return Some("DxDesk-Android-Universal.apk");
+    #[cfg(any(target_os = "ios", target_os = "ohos"))]
+    return None;
+    #[allow(unreachable_code)]
+    None
+}
+
+async fn do_check_dxdesk_software_update() -> hbb_common::ResultType<()> {
+    let Some(asset_name) = dxdesk_update_asset_name() else {
+        *SOFTWARE_UPDATE_URL.lock().unwrap() = String::new();
+        *SOFTWARE_UPDATE_DOWNLOAD_URL.lock().unwrap() = String::new();
+        return Ok(());
+    };
+
+    let proxy_conf = Config::get_socks();
+    let tls_url = get_url_for_tls(DXDESK_GITHUB_RELEASES_API, &proxy_conf);
+    let tls_type = get_cached_tls_type(tls_url);
+    let is_tls_not_cached = tls_type.is_none();
+    let tls_type = tls_type.unwrap_or(TlsType::Rustls);
+    let client = create_http_client_async(tls_type, false);
+    let response = match client
+        .get(DXDESK_GITHUB_RELEASES_API)
+        .header("User-Agent", "DxDesk")
+        .send()
+        .await
+    {
+        Ok(resp) => {
+            upsert_tls_cache(tls_url, tls_type, false);
+            resp
+        }
+        Err(err) => {
+            if is_tls_not_cached && err.is_request() {
+                let tls_type = TlsType::NativeTls;
+                let client = create_http_client_async(tls_type, false);
+                let resp = client
+                    .get(DXDESK_GITHUB_RELEASES_API)
+                    .header("User-Agent", "DxDesk")
+                    .send()
+                    .await?;
+                upsert_tls_cache(tls_url, tls_type, false);
+                resp
+            } else {
+                return Err(err.into());
+            }
+        }
+    };
+    if !response.status().is_success() {
+        bail!(
+            "DxDesk update service returned HTTP {}",
+            response.status()
+        );
+    }
+    let releases: Vec<Value> = serde_json::from_slice(&response.bytes().await?)?;
+    let mut release_page_url = String::new();
+    let mut download_url = String::new();
+
+    // GitHub returns releases newest-first. Select the newest release that
+    // contains the asset for this platform; Windows and other platforms are
+    // published by separate workflows and therefore do not always share a tag.
+    for release in releases {
+        if release.get("draft").and_then(Value::as_bool).unwrap_or(true)
+            || release
+                .get("prerelease")
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        {
+            continue;
+        }
+        let Some(tag) = release.get("tag_name").and_then(Value::as_str) else {
+            continue;
+        };
+        let Some(asset_url) = release
+            .get("assets")
+            .and_then(Value::as_array)
+            .and_then(|assets| {
+                assets.iter().find_map(|asset| {
+                    (asset.get("name").and_then(Value::as_str) == Some(asset_name))
+                        .then(|| asset.get("browser_download_url").and_then(Value::as_str))
+                        .flatten()
+                })
+            })
+        else {
+            continue;
+        };
+
+        if get_version_number(tag) > get_version_number(crate::VERSION) {
+            release_page_url = release
+                .get("html_url")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+                .to_owned();
+            download_url = asset_url.to_owned();
+        }
+        break;
+    }
+
+    if !release_page_url.is_empty() && !download_url.is_empty() {
+        #[cfg(feature = "flutter")]
+        {
+            let mut m = HashMap::new();
+            m.insert("name", "check_software_update_finish");
+            m.insert("url", release_page_url.as_str());
+            if let Ok(data) = serde_json::to_string(&m) {
+                let _ = crate::flutter::push_global_event(crate::flutter::APP_TYPE_MAIN, data);
+            }
+        }
+        *SOFTWARE_UPDATE_URL.lock().unwrap() = release_page_url;
+        *SOFTWARE_UPDATE_DOWNLOAD_URL.lock().unwrap() = download_url;
+    } else {
+        *SOFTWARE_UPDATE_URL.lock().unwrap() = String::new();
+        *SOFTWARE_UPDATE_DOWNLOAD_URL.lock().unwrap() = String::new();
+    }
+    Ok(())
+}
+
 // No need to check `danger_accept_invalid_cert` for now.
 // Because the url is always `https://api.rustdesk.com/version/latest`.
 #[tokio::main(flavor = "current_thread")]
 pub async fn do_check_software_update() -> hbb_common::ResultType<()> {
+    if is_custom_client() {
+        return do_check_dxdesk_software_update().await;
+    }
     let (request, url) =
         hbb_common::version_check_request(hbb_common::VER_TYPE_RUSTDESK_CLIENT.to_string());
     let proxy_conf = Config::get_socks();

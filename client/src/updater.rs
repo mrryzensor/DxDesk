@@ -181,7 +181,7 @@ fn check_update(manually: bool) -> ResultType<()> {
         return Ok(());
     }
     #[cfg(target_os = "windows")]
-    let update_msi = crate::platform::is_msi_installed()? && !crate::is_custom_client();
+    let update_msi = !crate::is_custom_client() && crate::platform::is_msi_installed()?;
     if !(manually || config::Config::get_bool_option(keys::OPTION_ALLOW_AUTO_UPDATE)) {
         return Ok(());
     }
@@ -194,25 +194,40 @@ fn check_update(manually: bool) -> ResultType<()> {
     if update_url.is_empty() {
         log::debug!("No update available.");
     } else {
-        let download_url = update_url.replace("tag", "download");
-        let version = download_url.split('/').last().unwrap_or_default();
-        #[cfg(target_os = "windows")]
-        let download_url = if cfg!(feature = "flutter") {
-            let Some(arch) = crate::platform::windows::release_arch_suffix() else {
-                bail!(
-                    "Unsupported Windows release architecture: {}",
-                    std::env::consts::ARCH
-                );
-            };
-            format!(
-                "{}/rustdesk-{}-{}.{}",
-                download_url,
-                version,
-                arch,
-                if update_msi { "msi" } else { "exe" }
-            )
+        let (download_url, version) = if crate::is_custom_client() {
+            let download_url = crate::common::SOFTWARE_UPDATE_DOWNLOAD_URL
+                .lock()
+                .unwrap()
+                .clone();
+            if download_url.is_empty() {
+                log::debug!("No DxDesk update asset available.");
+                return Ok(());
+            }
+            (download_url, crate::common::get_new_version())
         } else {
-            format!("{}/rustdesk-{}-x86-sciter.exe", download_url, version)
+            let download_root = update_url.replace("tag", "download");
+            let version = download_root.split('/').last().unwrap_or_default();
+            #[cfg(target_os = "windows")]
+            let download_url = if cfg!(feature = "flutter") {
+                let Some(arch) = crate::platform::windows::release_arch_suffix() else {
+                    bail!(
+                        "Unsupported Windows release architecture: {}",
+                        std::env::consts::ARCH
+                    );
+                };
+                format!(
+                    "{}/rustdesk-{}-{}.{}",
+                    download_root,
+                    version,
+                    arch,
+                    if update_msi { "msi" } else { "exe" }
+                )
+            } else {
+                format!("{}/rustdesk-{}-x86-sciter.exe", download_root, version)
+            };
+            #[cfg(not(target_os = "windows"))]
+            let download_url = format!("{}/rustdesk-{}-x86_64.dmg", download_root, version);
+            (download_url, version.to_owned())
         };
         log::debug!("New version available: {}", &version);
         let client = create_http_client_with_url_strict(&download_url)?;
@@ -376,8 +391,10 @@ pub fn get_update_download_file_from_url(url: &str) -> Option<PathBuf> {
     let tag = segments.next()?;
     let filename = segments.next()?;
 
-    if owner != "rustdesk"
-        || repo != "rustdesk"
+    let is_trusted_repository =
+        (owner == "rustdesk" && repo == "rustdesk")
+            || (owner == "mrryzensor" && repo == "DxDesk");
+    if !is_trusted_repository
         || releases != "releases"
         || download != "download"
         || tag.is_empty()

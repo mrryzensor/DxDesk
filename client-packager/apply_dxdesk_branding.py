@@ -15,6 +15,8 @@ import re
 import shutil
 from pathlib import Path
 
+from apply_dxdesk_update_overlay import apply_update_overlay
+
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 CLIENT_DIR = ROOT_DIR / "client"
@@ -189,6 +191,10 @@ def patch_branding(
         )
 
     replace_in_file(common_rs, patch_common)
+
+    # Reapply installation and update-channel changes after every upstream
+    # source refresh; client/ is a generated vendor snapshot.
+    apply_update_overlay(client_dir, app_name)
 
     common_dart = client_dir / "flutter" / "lib" / "common.dart"
 
