@@ -3,7 +3,12 @@
 ; ==============================================================================
 
 #define MyAppName "DxDesk"
-#define MyAppVersion "1.4.9"
+#ifndef MyAppVersion
+#define MyAppVersion "1.5.0"
+#endif
+#ifndef MyAppBuildDate
+#define MyAppBuildDate "1970-01-01 00:00"
+#endif
 #define MyAppPublisher "DxDesk"
 #define MyAppExeName "DxDesk.exe"
 #define MyAppAssocName MyAppName + " Remote Desktop"
@@ -36,6 +41,13 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "..\dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "output\RustDesk2.toml"; DestDir: "{userappdata}\RustDesk\config"; Flags: ignoreversion onlyifdoesntexist
+
+; Keep the installer metadata in the same uninstall key that the client
+; checks. Without BuildDate, every installed copy is incorrectly reported as
+; an older version because an empty registry value compares lower than the
+; build date embedded in the executable.
+[Registry]
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{E380B41C-8D57-48BC-96E6-8E383845496B}_is1"; ValueType: string; ValueName: "BuildDate"; ValueData: "{#MyAppBuildDate}"; Flags: uninsdeletevalue
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"

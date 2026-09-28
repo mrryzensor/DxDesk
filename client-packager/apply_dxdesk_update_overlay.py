@@ -33,6 +33,13 @@ fn dxdesk_update_asset_name() -> Option<&'static str> {
     #[allow(unreachable_code)]
     None
 }
+fn dxdesk_release_is_newer(tag: &str) -> bool {
+    if let Some(current_tag) = option_env!("DXDESK_BUILD_TAG").filter(|tag| !tag.is_empty()) {
+        let normalize = |value: &str| value.strip_prefix("source-").unwrap_or(value);
+        return normalize(tag) != normalize(current_tag);
+    }
+    get_version_number(tag) > get_version_number(crate::VERSION)
+}
 async fn do_check_dxdesk_software_update() -> hbb_common::ResultType<()> {
     let Some(asset_name) = dxdesk_update_asset_name() else {
         *SOFTWARE_UPDATE_URL.lock().unwrap() = String::new();
@@ -66,7 +73,7 @@ async fn do_check_dxdesk_software_update() -> hbb_common::ResultType<()> {
         let Some(asset_url) = release.get("assets").and_then(Value::as_array).and_then(|assets| assets.iter().find_map(|asset| {
             (asset.get("name").and_then(Value::as_str) == Some(asset_name)).then(|| asset.get("browser_download_url").and_then(Value::as_str)).flatten()
         })) else { continue; };
-        if get_version_number(tag) > get_version_number(crate::VERSION) {
+        if dxdesk_release_is_newer(tag) {
             release_page_url = release.get("html_url").and_then(Value::as_str).unwrap_or_default().to_owned();
             download_url = asset_url.to_owned();
         }
@@ -92,7 +99,7 @@ async fn do_check_dxdesk_software_update() -> hbb_common::ResultType<()> {
 UPDATER_BLOCK = r'''        let (download_url, version) = if crate::is_custom_client() {
             let download_url = crate::common::SOFTWARE_UPDATE_DOWNLOAD_URL.lock().unwrap().clone();
             if download_url.is_empty() { log::debug!("No DxDesk update asset available."); return Ok(()); }
-            (download_url, crate::common::get_new_version())
+            (download_url, crate::ui_interface::get_new_version())
         } else {
             let download_root = update_url.replace("tag", "download");
             let version = download_root.split('/').last().unwrap_or_default();
@@ -131,7 +138,46 @@ def apply_update_overlay(client_dir: Path, app_name: str = "DxDesk") -> None:
         if "owner == \"mrryzensor\"" not in content:
             content = content.replace('    if owner != "rustdesk"\n        || repo != "rustdesk"\n        || releases != "releases"', '    let is_trusted_repository =\n        (owner == "rustdesk" && repo == "rustdesk")\n            || (owner == "mrryzensor" && repo == "DxDesk");\n    if !is_trusted_repository\n        || releases != "releases"', 1)
         updater_rs.write_text(content, encoding="utf-8", newline="")
-    replace_regex(client_dir / "src" / "platform" / "windows.rs", r'(?m)^const IS1: &str = "[^"]+";', f'const IS1: &str = "{DXDESK_INNO_APP_ID}_is1";')
+    windows_rs = client_dir / "src" / "platform" / "windows.rs"
+    replace_regex(windows_rs, r'(?m)^const IS1: &str = "[^"]+";', f'const IS1: &str = "{DXDESK_INNO_APP_ID}_is1";')
+    replace_once(
+        windows_rs,
+        '    let exe = format!("{}\\\\{}.exe", path, crate::get_app_name());\n    (subkey, path, start_menu, exe)',
+        '''    let exe = format!("{}\\\\{}.exe", path, crate::get_app_name());
+    // Older branded installers used rustdesk.exe. Keep them detectable while
+    // new packages consistently use DxDesk.exe.
+    let exe = if !std::path::Path::new(&exe).exists() && crate::is_custom_client() {
+        let legacy_exe = format!("{}\\\\rustdesk.exe", path);
+        if std::path::Path::new(&legacy_exe).exists() {
+            legacy_exe
+        } else {
+            exe
+        }
+    } else {
+        exe
+    };
+    (subkey, path, start_menu, exe)''',
+    )
+    replace_once(
+        client_dir / "src" / "ui_interface.rs",
+        "        return crate::BUILD_DATE.cmp(&b).is_gt();",
+        "        return !b.is_empty() && crate::BUILD_DATE.cmp(&b).is_gt();",
+    )
+    replace_once(
+        windows_rs,
+        '''    format!("{}\\\\{}", pf, crate::get_app_name())''',
+        '''    let preferred = format!("{}\\\\{}", pf, crate::get_app_name());
+    if std::path::Path::new(&preferred).exists() {
+        return preferred;
+    }
+    if let Ok(pf32) = std::env::var("ProgramFiles(x86)") {
+        let legacy = format!("{}\\\\{}", pf32, crate::get_app_name());
+        if std::path::Path::new(&legacy).exists() {
+            return legacy;
+        }
+    }
+    preferred''',
+    )
     iss = Path(__file__).resolve().parent / "inno_setup_dxdesk.iss"
     replace_once(iss, "PrivilegesRequired=lowest", "PrivilegesRequired=admin")
     common_dart = client_dir / "flutter" / "lib" / "common.dart"

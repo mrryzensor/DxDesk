@@ -1049,6 +1049,18 @@ fn dxdesk_update_asset_name() -> Option<&'static str> {
     None
 }
 
+fn dxdesk_release_is_newer(tag: &str) -> bool {
+    // DxDesk release tags include the upstream commit, while the RustDesk
+    // semantic version often stays unchanged across upstream updates. The
+    // build workflow embeds the tag so an upstream commit change is treated
+    // as an update instead of silently looking equal to 1.5.0.
+    if let Some(current_tag) = option_env!("DXDESK_BUILD_TAG").filter(|tag| !tag.is_empty()) {
+        let normalize = |value: &str| value.strip_prefix("source-").unwrap_or(value);
+        return normalize(tag) != normalize(current_tag);
+    }
+    get_version_number(tag) > get_version_number(crate::VERSION)
+}
+
 async fn do_check_dxdesk_software_update() -> hbb_common::ResultType<()> {
     let Some(asset_name) = dxdesk_update_asset_name() else {
         *SOFTWARE_UPDATE_URL.lock().unwrap() = String::new();
@@ -1127,7 +1139,7 @@ async fn do_check_dxdesk_software_update() -> hbb_common::ResultType<()> {
             continue;
         };
 
-        if get_version_number(tag) > get_version_number(crate::VERSION) {
+        if dxdesk_release_is_newer(tag) {
             release_page_url = release
                 .get("html_url")
                 .and_then(Value::as_str)

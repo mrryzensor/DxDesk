@@ -54,6 +54,17 @@ jobs:
           python generate_assets.py
           python client-packager/apply_dxdesk_branding.py --client-dir client
 
+      - name: Set DxDesk build identity for branded updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version\s*=\s*"\([^"]*\)"/\1/p' client/Cargo.toml | head -n 1)
+          upstream_sha="$GITHUB_SHA"
+          if test -f .upstream-rustdesk.json; then
+            upstream_sha=$(python3 -c 'import json; print(json.load(open(".upstream-rustdesk.json"))["commit"])')
+          fi
+          echo "DXDESK_BUILD_TAG=v${version}-main.${upstream_sha:0:12}" >> "$GITHUB_ENV"
+
       - name: Install Android and RustDesk build dependencies
         run: |
           sudo apt-get update
@@ -271,6 +282,17 @@ jobs:
           python generate_assets.py
           python client-packager/apply_dxdesk_branding.py --client-dir client
 
+      - name: Set DxDesk build identity for branded updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version\s*=\s*"\([^"]*\)"/\1/p' client/Cargo.toml | head -n 1)
+          upstream_sha="$GITHUB_SHA"
+          if test -f .upstream-rustdesk.json; then
+            upstream_sha=$(python3 -c 'import json; print(json.load(open(".upstream-rustdesk.json"))["commit"])')
+          fi
+          echo "DXDESK_BUILD_TAG=v${version}-main.${upstream_sha:0:12}" >> "$GITHUB_ENV"
+
       - name: Normalize Debian maintainer script permissions
         shell: bash
         run: |
@@ -430,6 +452,17 @@ jobs:
           python -m pip install --upgrade pillow
           python generate_assets.py
           python client-packager/apply_dxdesk_branding.py --client-dir client
+
+      - name: Set DxDesk build identity for branded updates
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(sed -n 's/^version\s*=\s*"\([^"]*\)"/\1/p' client/Cargo.toml | head -n 1)
+          upstream_sha="$GITHUB_SHA"
+          if test -f .upstream-rustdesk.json; then
+            upstream_sha=$(python3 -c 'import json; print(json.load(open(".upstream-rustdesk.json"))["commit"])')
+          fi
+          echo "DXDESK_BUILD_TAG=v${version}-main.${upstream_sha:0:12}" >> "$GITHUB_ENV"
 
       - name: Install macOS build dependencies
         shell: bash

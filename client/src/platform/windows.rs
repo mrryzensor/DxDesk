@@ -1404,7 +1404,20 @@ fn get_default_install_path() -> String {
             pf = tmp;
         }
     }
-    format!("{}\\{}", pf, crate::get_app_name())
+    let preferred = format!("{}\\{}", pf, crate::get_app_name());
+    if std::path::Path::new(&preferred).exists() {
+        return preferred;
+    }
+    // A previous 32-bit DxDesk installer may have used Program Files (x86)
+    // even when the current client is 64-bit. Reuse that existing location
+    // so the old rustdesk.exe/DxDesk.exe installation remains discoverable.
+    if let Ok(pf32) = std::env::var("ProgramFiles(x86)") {
+        let legacy = format!("{}\\{}", pf32, crate::get_app_name());
+        if std::path::Path::new(&legacy).exists() {
+            return legacy;
+        }
+    }
+    preferred
 }
 
 pub fn check_update_broker_process() -> ResultType<()> {
@@ -1463,6 +1476,19 @@ fn get_install_info_with_subkey(subkey: String) -> (String, String, String, Stri
         crate::get_app_name()
     );
     let exe = format!("{}\\{}.exe", path, crate::get_app_name());
+    // Older DxDesk installers shipped the embedded Flutter executable as
+    // rustdesk.exe. Keep those installations detectable and usable while all
+    // new installers consistently ship DxDesk.exe.
+    let exe = if !std::path::Path::new(&exe).exists() && crate::is_custom_client() {
+        let legacy_exe = format!("{}\\rustdesk.exe", path);
+        if std::path::Path::new(&legacy_exe).exists() {
+            legacy_exe
+        } else {
+            exe
+        }
+    } else {
+        exe
+    };
     (subkey, path, start_menu, exe)
 }
 

@@ -56,7 +56,12 @@ jobs:
           $isccPath = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
           if (Test-Path $isccPath) {
               Write-Host "Compilando instalador oficial con Inno Setup..."
-              & $isccPath "client-packager\inno_setup_dxdesk.iss"
+              $cargo = Get-Content "client/Cargo.toml" -Raw
+              $versionMatch = [regex]::Match($cargo, '(?m)^version\s*=\s*"([^"]+)"')
+              $appVersion = if ($versionMatch.Success) { $versionMatch.Groups[1].Value } else { "1.5.0" }
+              $appBuildDate = (Get-Date).ToString("yyyy-MM-dd HH:mm")
+              & $isccPath "/DMyAppVersion=$appVersion" "/DMyAppBuildDate=$appBuildDate" "client-packager\inno_setup_dxdesk.iss"
+              if ($LASTEXITCODE -ne 0) { exit 1 }
           } else {
               Write-Warning "Inno Setup no encontrado en runner, omitiendo instalador .exe..."
           }

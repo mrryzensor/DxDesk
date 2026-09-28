@@ -568,7 +568,10 @@ pub fn is_installed_lower_version() -> bool {
     #[cfg(windows)]
     {
         let b = crate::platform::windows::get_reg("BuildDate");
-        return crate::BUILD_DATE.cmp(&b).is_gt();
+        // Third-party/legacy installers may not have written BuildDate. An
+        // absent value is unknown, not evidence that the installed copy is
+        // older than the running one.
+        return !b.is_empty() && crate::BUILD_DATE.cmp(&b).is_gt();
     }
 }
 
