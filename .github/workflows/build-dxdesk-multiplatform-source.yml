@@ -393,10 +393,24 @@ jobs:
       - name: Install macOS build dependencies
         shell: bash
         run: |
-          brew install llvm create-dmg pkg-config
-          curl -L -o /tmp/nasm.zip https://www.nasm.us/pub/nasm/releasebuilds/2.16.03/macosx/nasm-2.16.03-macosx.zip
-          unzip -o /tmp/nasm.zip -d /tmp/nasm
-          sudo cp /tmp/nasm/nasm-2.16.03/nasm /usr/local/bin/nasm
+          set -euo pipefail
+          # Install NASM from Homebrew instead of downloading from nasm.us.
+          # The latter intermittently refuses connections from Apple Silicon
+          # hosted runners and made an otherwise healthy build fail before
+          # Flutter/Rust compilation even started.
+          for attempt in 1 2 3; do
+            if brew install llvm create-dmg pkg-config nasm; then
+              break
+            fi
+            if [ "$attempt" -eq 3 ]; then
+              echo "Homebrew dependency installation failed after 3 attempts" >&2
+              exit 1
+            fi
+            delay=$((attempt * 20))
+            echo "Homebrew dependency installation failed; retrying in ${delay}s..." >&2
+            sleep "$delay"
+          done
+          command -v nasm
           nasm --version
 
       - name: Setup Flutter
