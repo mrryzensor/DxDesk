@@ -47,7 +47,7 @@ Source: "output\RustDesk2.toml"; DestDir: "{userappdata}\RustDesk\config"; Flags
 ; an older version because an empty registry value compares lower than the
 ; build date embedded in the executable.
 [Registry]
-Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{E380B41C-8D57-48BC-96E6-8E383845496B}_is1"; ValueType: string; ValueName: "BuildDate"; ValueData: "{#MyAppBuildDate}"; Flags: uninsdeletevalue
+Root: HKLM; Subkey: "Software\Microsoft\Windows\CurrentVersion\Uninstall\{{E380B41C-8D57-48BC-96E6-8E383845496B}}_is1"; ValueType: string; ValueName: "BuildDate"; ValueData: "{#MyAppBuildDate}"; Flags: uninsdeletevalue
 
 [Icons]
 Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
