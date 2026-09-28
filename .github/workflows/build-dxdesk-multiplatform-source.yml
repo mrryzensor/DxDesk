@@ -77,10 +77,51 @@ jobs:
           df -h /
 
       - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ env.FLUTTER_VERSION }}
-          channel: stable
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The action's setup.sh can fail with curl exit 35 when the hosted
+          # runner has a transient TLS connection reset. Download the same
+          # official SDK archive here with retries and verify its checksum.
+          flutter_root="/opt/hostedtoolcache/flutter/stable-${FLUTTER_VERSION}-x64/flutter"
+          archive="flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
+          archive_url="https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/${archive}"
+          archive_path="${RUNNER_TEMP}/${archive}"
+          expected_sha256="a7c82f551a9eae018e078f6bb186171e5a77920d35a3d75a61d9a593d0a9e4ae"
+          toolcache_root="$(dirname "$flutter_root")"
+
+          download_with_retries() {
+            local url="$1"
+            local destination="$2"
+            for attempt in 1 2 3 4 5 6; do
+              if curl --fail --location --silent --show-error \
+                --connect-timeout 30 --max-time 600 \
+                --retry 5 --retry-all-errors "$url" -o "$destination"; then
+                return 0
+              fi
+              rm -f "$destination"
+              sleep $((attempt * 20))
+            done
+            echo "Unable to download $url after repeated attempts" >&2
+            return 1
+          }
+
+          download_with_retries "$archive_url" "$archive_path"
+          echo "${expected_sha256}  ${archive_path}" | sha256sum --check --status
+          mkdir -p "$toolcache_root"
+          tar -xJf "$archive_path" -C "$toolcache_root"
+
+          pub_cache="${HOME}/.pub-cache"
+          {
+            echo "FLUTTER_ROOT=${flutter_root}"
+            echo "PUB_CACHE=${pub_cache}"
+          } >> "$GITHUB_ENV"
+          {
+            echo "${flutter_root}/bin"
+            echo "${flutter_root}/bin/cache/dart-sdk/bin"
+            echo "${pub_cache}/bin"
+          } >> "$GITHUB_PATH"
+          "${flutter_root}/bin/flutter" --version
 
       - name: Setup Android NDK
         id: setup-ndk
