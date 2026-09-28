@@ -102,6 +102,74 @@ def sync_client(source: Path) -> None:
     )
 
 
+def stabilize_upstream_build_files() -> None:
+    """Reapply CI compatibility patches after replacing the vendored checkout.
+
+    RustDesk's upstream checkout is intentionally replaced wholesale during a
+    sync. These build inputs need local fixes for the hosted runners: vcpkg
+    must keep each Android ABI in its own install root, and AppImage Builder
+    must accept both xz and zstd Debian payloads.
+    """
+    android_deps = CLIENT_DIR / "flutter" / "build_android_deps.sh"
+    if android_deps.is_file():
+        content = android_deps.read_text(encoding="utf-8")
+        if "ISOLATED_ROOT=\"${VCPKG_ROOT}/android-installed/${VCPKG_TARGET}\"" not in content:
+            marker = 'echo "INFO: Building and install vcpkg dependencies for Android ${ANDROID_ABI} ..."\n\n'
+            isolated = (
+                "# vcpkg manifest mode can remove the previous ABI when all Android\n"
+                "# triplets share one install root. Build each ABI in isolation and\n"
+                "# copy its complete tree to the stable location consumed by Cargo.\n"
+                "ISOLATED_ROOT=\"${VCPKG_ROOT}/android-installed/${VCPKG_TARGET}\"\n"
+                "FINAL_TRIPLET_ROOT=\"${VCPKG_ROOT}/installed/${VCPKG_TARGET}\"\n"
+                "rm -rf \"${ISOLATED_ROOT}\" \"${FINAL_TRIPLET_ROOT}\"\n"
+                "mkdir -p \"${ISOLATED_ROOT}\" \"${VCPKG_ROOT}/installed\"\n\n"
+            )
+            if marker not in content:
+                raise RuntimeError(f"No se encontró el punto de parcheo Android: {android_deps}")
+            content = content.replace(marker, marker + isolated, 1)
+            if '--x-install-root=' in content:
+                content = content.replace(
+                    '\t--x-install-root="${VCPKG_ROOT}/installed"',
+                    '\t--x-install-root="${ISOLATED_ROOT}"',
+                    1,
+                )
+            else:
+                content = content.replace(
+                    '\t--triplet "${VCPKG_TARGET}"',
+                    '\t--triplet "${VCPKG_TARGET}" \\\n\t--x-install-root="${ISOLATED_ROOT}"',
+                    1,
+                )
+            completion = 'popd\n\necho "INFO: Completed building vcpkg dependencies for Android ${ANDROID_ABI}"'
+            replacement = (
+                "popd\n\n"
+                "if [ ! -d \"${ISOLATED_ROOT}/${VCPKG_TARGET}\" ]; then\n"
+                "\techo \"ERROR: vcpkg did not create the ${VCPKG_TARGET} install tree\" 1>&2\n"
+                "\texit 1\n"
+                "fi\n"
+                "cp -a \"${ISOLATED_ROOT}/${VCPKG_TARGET}\" \"${FINAL_TRIPLET_ROOT}\"\n\n"
+                "if [ ! -s \"${FINAL_TRIPLET_ROOT}/include/opus/opus_multistream.h\" ] ||\n"
+                "\t[ ! -s \"${FINAL_TRIPLET_ROOT}/lib/libopus.a\" ]; then\n"
+                "\techo \"ERROR: incomplete Opus package for ${VCPKG_TARGET}\" 1>&2\n"
+                "\texit 1\n"
+                "fi\n\n"
+                'echo "INFO: Completed building vcpkg dependencies for Android ${ANDROID_ABI}"'
+            )
+            if completion not in content:
+                raise RuntimeError(f"No se encontró el cierre de parcheo Android: {android_deps}")
+            content = content.replace(completion, replacement, 1)
+            android_deps.write_text(content, encoding="utf-8", newline="\n")
+
+    for recipe_name in ("AppImageBuilder-x86_64.yml", "AppImageBuilder-aarch64.yml"):
+        recipe = CLIENT_DIR / "appimage" / recipe_name
+        if not recipe.is_file():
+            continue
+        content = recipe.read_text(encoding="utf-8")
+        patched = content.replace("bsdtar -zxvf rustdesk.deb", "bsdtar -xf rustdesk.deb")
+        patched = patched.replace("tar -xvf ./data.tar.xz", "tar -xvf ./data.tar.*")
+        if patched != content:
+            recipe.write_text(patched, encoding="utf-8", newline="\n")
+
+
 def set_github_output(commit: str, changed: bool) -> None:
     output_path = os.environ.get("GITHUB_OUTPUT")
     if output_path:
@@ -132,6 +200,8 @@ def main() -> int:
             print(f"Clonando {args.repository}@{args.ref} ({commit[:12]})...")
             clone_upstream(args.repository, args.ref, upstream_dir)
             sync_client(upstream_dir)
+
+    stabilize_upstream_build_files()
 
     # Reapply the overlay even when upstream did not move, so branding.json or
     # the logo can be changed independently of the upstream sync.

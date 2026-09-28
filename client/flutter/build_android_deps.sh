@@ -53,13 +53,33 @@ fi
 
 echo "INFO: Building and install vcpkg dependencies for Android ${ANDROID_ABI} ..."
 
+# vcpkg manifest mode can remove the previous ABI when all Android triplets
+# share one install root. Build each ABI in isolation and copy its complete
+# tree to the stable location consumed by Cargo.
+ISOLATED_ROOT="${VCPKG_ROOT}/android-installed/${VCPKG_TARGET}"
+FINAL_TRIPLET_ROOT="${VCPKG_ROOT}/installed/${VCPKG_TARGET}"
+rm -rf "${ISOLATED_ROOT}" "${FINAL_TRIPLET_ROOT}"
+mkdir -p "${ISOLATED_ROOT}" "${VCPKG_ROOT}/installed"
+
 pushd "${SCRIPTDIR}/.."
 
 "${VCPKG_ROOT}/vcpkg" install \
 	--triplet "${VCPKG_TARGET}" \
-	--x-install-root="${VCPKG_ROOT}/installed"
+	--x-install-root="${ISOLATED_ROOT}"
 
 popd
+
+if [ ! -d "${ISOLATED_ROOT}/${VCPKG_TARGET}" ]; then
+	echo "ERROR: vcpkg did not create the ${VCPKG_TARGET} install tree" 1>&2
+	exit 1
+fi
+cp -a "${ISOLATED_ROOT}/${VCPKG_TARGET}" "${FINAL_TRIPLET_ROOT}"
+
+if [ ! -s "${FINAL_TRIPLET_ROOT}/include/opus/opus_multistream.h" ] ||
+	[ ! -s "${FINAL_TRIPLET_ROOT}/lib/libopus.a" ]; then
+	echo "ERROR: incomplete Opus package for ${VCPKG_TARGET}" 1>&2
+	exit 1
+fi
 
 echo "INFO: Completed building vcpkg dependencies for Android ${ANDROID_ABI}"
 
