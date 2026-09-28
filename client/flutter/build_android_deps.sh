@@ -53,9 +53,9 @@ fi
 
 echo "INFO: Building and install vcpkg dependencies for Android ${ANDROID_ABI} ..."
 
-# vcpkg manifest mode can remove the previous ABI when all Android triplets
-# share one install root. Build each ABI in isolation and copy its complete
-# tree to the stable location consumed by Cargo.
+# vcpkg manifest mode can remove the previous ABI when all Android
+# triplets share one install root. Build each ABI in isolation and
+# copy its complete tree to the stable location consumed by Cargo.
 ISOLATED_ROOT="${VCPKG_ROOT}/android-installed/${VCPKG_TARGET}"
 FINAL_TRIPLET_ROOT="${VCPKG_ROOT}/installed/${VCPKG_TARGET}"
 rm -rf "${ISOLATED_ROOT}" "${FINAL_TRIPLET_ROOT}"
