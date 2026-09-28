@@ -690,6 +690,19 @@ mod tests {
     }
 
     #[test]
+    fn update_download_file_accepts_dxdesk_release_assets() {
+        let file = get_download_file_from_url(
+            "https://github.com/mrryzensor/DxDesk/releases/download/v1.5.0-main.test/DxDesk-Windows-x64.exe",
+        )
+        .expect("valid DxDesk release asset URL");
+
+        assert_eq!(
+            file.file_name().and_then(|name| name.to_str()),
+            Some("DxDesk-Windows-x64.exe")
+        );
+    }
+
+    #[test]
     fn update_download_file_rejects_untrusted_or_malformed_urls() {
         for url in [
             "http://github.com/rustdesk/rustdesk/releases/download/1/rustdesk.exe",
