@@ -1,4 +1,8 @@
-use crate::{common::do_check_software_update, hbbs_http::create_http_client_with_url_strict};
+use crate::{
+    common::do_check_software_update,
+    hbbs_http::create_http_client_with_url_strict,
+    ui_interface::get_new_version,
+};
 use hbb_common::{bail, config, log, ResultType};
 use base::config::keys;
 use std::{
@@ -203,7 +207,7 @@ fn check_update(manually: bool) -> ResultType<()> {
                 log::debug!("No DxDesk update asset available.");
                 return Ok(());
             }
-            (download_url, crate::common::get_new_version())
+            (download_url, get_new_version())
         } else {
             let download_root = update_url.replace("tag", "download");
             let version = download_root.split('/').last().unwrap_or_default();
