@@ -2,6 +2,18 @@
 
 Sistema completo de escritorio remoto de alto rendimiento, 100% privado y optimizado para desplegar en tu **Oracle Cloud VPS (Ampere A1 ARM64 / AMD64 con Ubuntu)** junto con el empaquetado de clientes con la marca e icono de **DxDesk**.
 
+## Landing page
+
+La landing está en `docs/` y muestra descargas directas de la release estable más reciente disponible para cada sistema operativo. Detecta la plataforma del visitante y la pone primero. Los assets y sus versiones se consultan en GitHub Releases, así que la página no necesita actualizarse al publicar una nueva versión.
+
+Para verla localmente, desde la raíz del repositorio ejecuta:
+
+```bash
+python -m http.server 8000 --directory docs
+```
+
+Después abre `http://localhost:8000`. Para publicarla con GitHub Pages, selecciona **Settings > Pages > Deploy from a branch**, la rama `main` y la carpeta `/docs`.
+
 ---
 
 ## Estructura del Proyecto
@@ -28,7 +40,7 @@ DxDesk/
 ├── dist/
 │   └── DxDesk.exe                 # Ejecutable listo para Windows con tu logo y marca
 ├── source-build/                  # Utilidades de compilación desde código fuente
-├── scripts/sync_rustdesk.py       # Sincroniza RustDesk master y reaplica la marca
+├── scripts/sync_rustdesk.py       # Sincroniza la última release numerada y reaplica la marca
 └── .github/workflows/              # Sincronización y builds nativos por plataforma
 ```
 
@@ -104,10 +116,12 @@ Si en algún momento actualizas `logo.png`:
 
 ## 🔄 Actualización automática desde RustDesk
 
-El workflow **Sync RustDesk upstream** consulta diariamente `rustdesk/rustdesk`
-en la rama `master`. Cuando encuentra un commit nuevo, reemplaza la copia de
-`client/`, reaplica `branding.json` y sube un commit a `main`. Ese commit inicia
-las compilaciones de fuente de Windows, Android, Linux y macOS.
+El workflow **Sync RustDesk upstream** consulta diariamente la última release
+numerada de `rustdesk/rustdesk` (omite `nightly`). Sólo cuando aparece un tag de
+versión nuevo,
+reemplaza la copia de `client/`, reaplica `branding.json` y sube un commit a
+`main`; entonces inicia las compilaciones de fuente de Windows, Android, Linux y
+macOS. Los commits diarios de `master` no disparan compilaciones.
 
 `client/` se considera una copia vendorizada generada: cualquier cambio manual
 que no forme parte de la configuración de marca se sobrescribirá en la siguiente
@@ -131,7 +145,8 @@ GitHub siempre descarga los artefactos de `actions/upload-artifact` como un ZIP,
 aunque dentro haya un `.exe`. Para descargar archivos individuales hay que abrir
 la sección **Releases** y usar los assets publicados allí.
 
-El workflow `Build DxDesk Other Platforms From Source` compila desde `master`:
+El workflow `Build DxDesk Other Platforms From Source` compila desde la release
+numerada sincronizada:
 
 - Android: APK universal y APK ARM64 con nombre, logo y etiqueta personalizados.
 - Linux: paquete `.deb` y AppImage con interfaz, iconos y archivos `.desktop` personalizados.

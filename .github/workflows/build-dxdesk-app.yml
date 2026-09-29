@@ -1,14 +1,6 @@
 name: Build DxDesk From Source (100% Branded UI)
 
 on:
-  push:
-    branches:
-      - main
-    # Workflow-only fixes are dispatched explicitly and must not start a
-    # second Windows build while another platform matrix is running.
-    paths-ignore:
-      - '.github/workflows/build-dxdesk-app.yml'
-      - '.github/workflows/build-dxdesk-multiplatform-source.yml'
   workflow_dispatch:
     inputs:
       server_host:

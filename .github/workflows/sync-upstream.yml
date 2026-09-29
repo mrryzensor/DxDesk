@@ -2,15 +2,9 @@ name: Sync RustDesk upstream
 
 on:
   schedule:
-    # RustDesk main is checked once per day. A commit is created only when the
-    # upstream revision changed, which then starts the branded build workflow.
+    # Check daily, but rebuild only when RustDesk publishes a new version tag.
     - cron: "15 4 * * *"
   workflow_dispatch:
-    inputs:
-      upstream_ref:
-        description: "Rama de RustDesk que se desea sincronizar"
-        required: false
-        default: "master"
 
 permissions:
   contents: write
@@ -41,9 +35,8 @@ jobs:
         run: python generate_assets.py
 
       - name: Sync and brand RustDesk source
-        env:
-          UPSTREAM_REF: ${{ github.event.inputs.upstream_ref || 'master' }}
-        run: python scripts/sync_rustdesk.py --ref "$UPSTREAM_REF"
+        id: sync
+        run: python scripts/sync_rustdesk.py
 
       - name: Commit upstream update
         shell: bash
@@ -57,10 +50,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A client .upstream-rustdesk.json
           upstream_sha=$(python -c "import json; print(json.load(open('.upstream-rustdesk.json', encoding='utf-8'))['commit'][:12])")
-          git commit -m "chore: sync RustDesk upstream ${upstream_sha}"
+          release_version=$(python -c "import json; print(json.load(open('.upstream-rustdesk.json', encoding='utf-8'))['version'])")
+          git commit -m "chore: sync RustDesk ${release_version} (${upstream_sha})"
           git push origin HEAD:main
 
-          # Los pushes hechos con GITHUB_TOKEN no disparan otros workflows de
-          # forma implícita. Inicia explícitamente las compilaciones de fuente.
-          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh workflow run build-dxdesk-app.yml --ref main
-          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh workflow run build-dxdesk-multiplatform-source.yml --ref main
+          if [[ "${{ steps.sync.outputs.changed }}" == "true" ]]; then
+            # Pushes made with GITHUB_TOKEN do not start the build workflows.
+            GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh workflow run build-dxdesk-app.yml --ref main
+            GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh workflow run build-dxdesk-multiplatform-source.yml --ref main
+          else
+            echo "RustDesk sigue en la release ${release_version}; no se recompila."
+          fi

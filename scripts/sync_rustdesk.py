@@ -11,12 +11,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
@@ -49,25 +52,6 @@ def current_state() -> dict:
         return json.load(handle)
 
 
-def write_state(repository: str, ref: str, commit: str, previous: dict) -> None:
-    if (
-        previous.get("repository") == repository
-        and previous.get("ref") == ref
-        and previous.get("commit") == commit
-        and STATE_FILE.exists()
-    ):
-        return
-    state = {
-        "repository": repository,
-        "ref": ref,
-        "commit": commit,
-        "synced_at": datetime.now(timezone.utc).isoformat(),
-    }
-    content = json.dumps(state, indent=2, ensure_ascii=False) + "\n"
-    if not STATE_FILE.exists() or STATE_FILE.read_text(encoding="utf-8") != content:
-        STATE_FILE.write_text(content, encoding="utf-8")
-
-
 def clone_upstream(repository: str, ref: str, destination: Path) -> None:
     run(
         [
@@ -83,6 +67,96 @@ def clone_upstream(repository: str, ref: str, destination: Path) -> None:
             str(destination),
         ]
     )
+
+
+def version_from_tag(tag: str) -> tuple[str, str] | None:
+    match = re.fullmatch(r"v?(\d+\.\d+\.\d+)(?:[-+][0-9A-Za-z.-]+)?", tag)
+    if not match:
+        return None
+    version = tag[1:] if tag.startswith("v") else tag
+    return version, match.group(1)
+
+
+def latest_release(repository: str) -> tuple[str, str, str, str]:
+    parsed = urlparse(repository.removesuffix(".git"))
+    parts = [part for part in parsed.path.split("/") if part]
+    if parsed.netloc.lower() != "github.com" or len(parts) != 2:
+        raise ValueError(f"No se puede consultar releases para este repositorio: {repository}")
+
+    request = Request(
+        f"https://api.github.com/repos/{parts[0]}/{parts[1]}/releases?per_page=100",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "User-Agent": "DxDesk-upstream-sync",
+        },
+    )
+    with urlopen(request, timeout=30) as response:
+        releases = json.load(response)
+
+    selected = None
+    for release in releases:
+        tag = release.get("tag_name")
+        parsed_version = version_from_tag(tag) if isinstance(tag, str) else None
+        if parsed_version:
+            selected = (tag, parsed_version)
+            break
+    if not selected:
+        raise RuntimeError("No se encontró una release numerada de RustDesk")
+    tag, parsed_version = selected
+    version, cargo_version = parsed_version
+
+    refs = run(
+        ["git", "ls-remote", repository, f"refs/tags/{tag}", f"refs/tags/{tag}^{{}}"],
+        capture_output=True,
+    )
+    tag_refs = {ref: commit for commit, ref in (line.split() for line in refs.splitlines())}
+    commit = tag_refs.get(f"refs/tags/{tag}^{{}}", tag_refs.get(f"refs/tags/{tag}"))
+    if not commit:
+        raise RuntimeError(f"No se pudo resolver el commit de RustDesk {tag}")
+    return tag, version, cargo_version, commit
+
+
+def client_version() -> str | None:
+    return client_version_from(CLIENT_DIR)
+
+
+def client_version_from(client_dir: Path) -> str | None:
+    manifest = client_dir / "Cargo.toml"
+    if not manifest.is_file():
+        return None
+    content = manifest.read_text(encoding="utf-8")
+    package = content.split("[package]", 1)[1].split("\n[", 1)[0]
+    for line in package.splitlines():
+        key, separator, value = line.partition("=")
+        if separator and key.strip() == "version":
+            return value.strip().strip('"')
+    return None
+
+
+def write_release_state(
+    repository: str,
+    release_tag: str,
+    version: str,
+    release_commit: str,
+    source_commit: str,
+    source_ref: str,
+    previous: dict,
+) -> None:
+    state = {
+        "repository": repository,
+        "ref": release_tag,
+        "version": version,
+        "release_commit": release_commit,
+        "source_ref": source_ref,
+        "commit": source_commit,
+    }
+    unchanged = all(previous.get(key) == value for key, value in state.items())
+    state["synced_at"] = (
+        previous.get("synced_at") if unchanged else datetime.now(timezone.utc).isoformat()
+    )
+    content = json.dumps(state, indent=2, ensure_ascii=False) + "\n"
+    if not STATE_FILE.exists() or STATE_FILE.read_text(encoding="utf-8") != content:
+        STATE_FILE.write_text(content, encoding="utf-8")
 
 
 def sync_client(source: Path) -> None:
@@ -170,11 +244,12 @@ def stabilize_upstream_build_files() -> None:
             recipe.write_text(patched, encoding="utf-8", newline="\n")
 
 
-def set_github_output(commit: str, changed: bool) -> None:
+def set_github_output(commit: str, version: str, changed: bool) -> None:
     output_path = os.environ.get("GITHUB_OUTPUT")
     if output_path:
         with open(output_path, "a", encoding="utf-8") as handle:
             handle.write(f"upstream_sha={commit}\n")
+            handle.write(f"version={version}\n")
             handle.write(f"changed={'true' if changed else 'false'}\n")
 
 
@@ -182,23 +257,54 @@ def main() -> int:
     branding = load_branding()
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--repository", default=branding["upstream_repository"])
-    parser.add_argument("--ref", default=branding["upstream_ref"])
+    parser.add_argument(
+        "--ref",
+        default=branding["upstream_ref"],
+        help="última versión numerada o una etiqueta de versión explícita",
+    )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args()
 
-    commit = run(
-        ["git", "ls-remote", args.repository, f"refs/heads/{args.ref}"],
-        capture_output=True,
-    ).split()[0]
     old_state = current_state()
-    upstream_changed = old_state.get("commit") != commit
-    source_changed = upstream_changed or args.force or not (CLIENT_DIR / "Cargo.toml").exists()
+    if args.ref == "latest":
+        release_tag, version, cargo_release_version, release_commit = latest_release(args.repository)
+    else:
+        release_tag = args.ref
+        parsed_version = version_from_tag(release_tag)
+        if not parsed_version:
+            raise ValueError(f"--ref debe ser una etiqueta de versión, no una rama: {release_tag}")
+        version, cargo_release_version = parsed_version
+        refs = run(
+            ["git", "ls-remote", args.repository, f"refs/tags/{release_tag}", f"refs/tags/{release_tag}^{{}}"],
+            capture_output=True,
+        )
+        tag_refs = {ref: commit for commit, ref in (line.split() for line in refs.splitlines())}
+        release_commit = tag_refs.get(
+            f"refs/tags/{release_tag}^{{}}", tag_refs.get(f"refs/tags/{release_tag}")
+        )
+        if not release_commit:
+            raise RuntimeError(f"No se encontró la etiqueta {release_tag} en {args.repository}")
+    current_version = client_version()
+    known_version = old_state.get("version") or current_version
+    repository_changed = old_state.get("repository", args.repository) != args.repository
+    source_changed = (
+        known_version != version
+        or repository_changed
+        or args.force
+        or current_version is None
+    )
 
     if source_changed:
         with tempfile.TemporaryDirectory(prefix="dxdesk-rustdesk-") as temp_dir:
             upstream_dir = Path(temp_dir) / "rustdesk"
-            print(f"Clonando {args.repository}@{args.ref} ({commit[:12]})...")
-            clone_upstream(args.repository, args.ref, upstream_dir)
+            print(f"Clonando release {args.repository}@{release_tag} ({release_commit[:12]})...")
+            clone_upstream(args.repository, release_tag, upstream_dir)
+            upstream_version = client_version_from(upstream_dir)
+            if upstream_version != cargo_release_version:
+                raise RuntimeError(
+                    f"El tag {release_tag} tiene versión de Cargo {upstream_version}, "
+                    f"esperaba {cargo_release_version}"
+                )
             sync_client(upstream_dir)
 
     stabilize_upstream_build_files()
@@ -215,9 +321,19 @@ def main() -> int:
             branding.get("server_key", ""),
         ]
     )
-    write_state(args.repository, args.ref, commit, old_state)
-    set_github_output(commit, source_changed)
-    print(f"RustDesk upstream sincronizado en {commit}.")
+    source_commit = release_commit if source_changed else old_state.get("commit", release_commit)
+    source_ref = release_tag if source_changed else old_state.get("source_ref", old_state.get("ref", release_tag))
+    write_release_state(
+        args.repository,
+        release_tag,
+        version,
+        release_commit,
+        source_commit,
+        source_ref,
+        old_state,
+    )
+    set_github_output(source_commit, version, source_changed)
+    print(f"RustDesk {version} sincronizado; fuente {'actualizada' if source_changed else 'sin cambios'}.")
     return 0
 
 

@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#f7f9fd" />
+    <meta name="description" content="Conéctate a tus dispositivos de forma segura desde cualquier lugar. Descarga DxDesk para Windows, macOS, Linux y Android." />
+    <title>DxDesk — Tu espacio, en todas partes</title>
+    <link rel="icon" type="image/png" href="assets/icon.png" />
+    <link rel="preconnect" href="https://api.github.com" />
+    <link rel="stylesheet" href="styles.css?v=3" />
+    <script src="app.js?v=5" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#contenido">Saltar al contenido</a>
+
+    <header class="topbar">
+      <nav class="nav wrap" aria-label="Navegación principal">
+        <a class="brand" href="#inicio" aria-label="DxDesk, inicio">
+          <img src="assets/icon.png" alt="" width="38" height="38" />
+          <span>Dx<span class="brand-accent">Desk</span></span>
+        </a>
+        <div class="nav-links">
+          <a href="#ventajas">La experiencia</a>
+          <a href="#descargas">Descargas</a>
+          <a href="https://github.com/mrryzensor/DxDesk" target="_blank" rel="noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+        </div>
+        <a class="nav-cta" href="#descargas">Obtener DxDesk <span aria-hidden="true">↗</span></a>
+        <button class="menu-toggle" type="button" aria-label="Abrir menú" aria-expanded="false" aria-controls="mobile-menu">
+          <span></span><span></span>
+        </button>
+      </nav>
+      <div class="mobile-menu" id="mobile-menu" hidden>
+        <a href="#ventajas">La experiencia</a>
+        <a href="#descargas">Descargas</a>
+        <a href="https://github.com/mrryzensor/DxDesk" target="_blank" rel="noreferrer">GitHub ↗</a>
+      </div>
+    </header>
+
+    <main id="contenido">
+      <section class="hero wrap" id="inicio">
+        <div class="hero-copy reveal">
+          <div class="eyebrow"><span class="eyebrow-dot"></span> Escritorio remoto, sin complicaciones</div>
+          <h1>Tu espacio.<br />En todas <span>partes.</span></h1>
+          <p class="hero-lede">Accede a tus dispositivos desde donde estés. Una conexión fluida y privada para que puedas seguir con lo que importa.</p>
+          <div class="hero-actions">
+            <a class="button button-primary" id="hero-download" href="#descargas">
+              <span id="hero-download-label">Descargar DxDesk</span>
+              <svg aria-hidden="true" viewBox="0 0 20 20"><path d="M10 2.75v9.5m0 0 3.5-3.5M10 12.25l-3.5-3.5M3.5 13.5v2.75h13V13.5" /></svg>
+            </a>
+            <a class="button button-quiet" href="#ventajas">Conoce DxDesk <span aria-hidden="true">↓</span></a>
+          </div>
+          <div class="detected-note" id="detected-note" aria-live="polite">
+            <span class="detected-check" aria-hidden="true">✓</span>
+            <span>Preparando la descarga para tu dispositivo</span>
+          </div>
+          <div class="hero-proof">
+            <div class="proof-avatars" aria-hidden="true"><span>W</span><span>⌘</span><span>◈</span></div>
+            <p>Una experiencia consistente<br /><strong>en todos tus dispositivos</strong></p>
+          </div>
+        </div>
+
+        <div class="hero-visual reveal" aria-label="Ilustración de una sesión remota de DxDesk" role="img">
+          <div class="visual-orbit orbit-one"></div>
+          <div class="visual-orbit orbit-two"></div>
+          <div class="visual-glow"></div>
+          <div class="float-chip chip-secure"><span class="chip-icon shield-icon">✓</span><span><strong>Conexión privada</strong><small>Protegida de extremo a extremo</small></span></div>
+          <div class="remote-window">
+            <div class="window-top">
+              <div class="window-controls"><i></i><i></i><i></i></div>
+              <div class="window-address"><span class="lock-mini">⌑</span> Oficina · Dispositivo remoto</div>
+              <span class="window-menu">···</span>
+            </div>
+            <div class="remote-screen">
+              <div class="screen-sidebar">
+                <div class="screen-brand"><img src="assets/icon.png" alt="" /> <b>DxDesk</b></div>
+                <div class="side-line active"><span class="side-symbol">⌂</span><span>Sesión</span></div>
+                <div class="side-line"><span class="side-symbol">▤</span><span>Archivos</span></div>
+                <div class="side-line"><span class="side-symbol">⚙</span><span>Ajustes</span></div>
+                <div class="side-avatar">D</div>
+              </div>
+              <div class="screen-main">
+                <div class="screen-heading"><div><small>DISPOSITIVO REMOTO</small><strong>Estación de trabajo</strong></div><span class="online"><i></i> Conectado</span></div>
+                <div class="desktop-preview">
+                  <div class="desktop-sky"><div class="desktop-moon"></div><div class="mountain mountain-back"></div><div class="mountain mountain-front"></div><div class="desktop-dock"><span>◈</span><span>▣</span><span>◉</span><span>⌘</span><span>✦</span></div></div>
+                  <div class="cursor-pointer"></div>
+                </div>
+                <div class="screen-bottom"><span><i></i> Conexión estable</span><span>1920 × 1080 <b>⌄</b></span></div>
+              </div>
+            </div>
+          </div>
+          <div class="float-chip chip-latency"><span class="latency-bars"><i></i><i></i><i></i><i></i></span><span><strong>Todo fluye</strong><small>Respuesta en tiempo real</small></span></div>
+          <div class="visual-caption"><span class="caption-line"></span> TU ESCRITORIO, A UN INSTANTE</div>
+          <div class="visual-sparkle sparkle-a">✳</div><div class="visual-sparkle sparkle-b">✦</div>
+        </div>
+        <div class="hero-bottom-rule"><span></span><span>DESLIZA PARA DESCUBRIR</span><span></span></div>
+      </section>
+
+      <section class="platform-ribbon" aria-label="Plataformas compatibles">
+        <div class="wrap ribbon-inner">
+          <span>Listo para tus dispositivos</span>
+          <div class="ribbon-platform"><b class="os-mark windows-mark">⊞</b> Windows</div>
+          <div class="ribbon-platform"><b class="os-mark apple-mark">⌘</b> macOS</div>
+          <div class="ribbon-platform"><b class="os-mark linux-mark">◈</b> Linux</div>
+          <div class="ribbon-platform"><b class="os-mark android-mark">●</b> Android</div>
+        </div>
+      </section>
+
+      <section class="features-section section-pad" id="ventajas">
+        <div class="wrap">
+          <div class="section-heading reveal">
+            <div>
+              <div class="eyebrow"><span class="eyebrow-dot"></span> La experiencia DxDesk</div>
+              <h2>Simple por diseño.<br /><span>Potente cuando cuenta.</span></h2>
+            </div>
+            <p>La tranquilidad de tener tus equipos al alcance, con una experiencia pensada para acompañarte todos los días.</p>
+          </div>
+          <div class="feature-grid">
+            <article class="feature-card reveal">
+              <div class="feature-icon icon-blue"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5.5 6v5.1c0 4.2 2.8 8 6.5 9.4 3.7-1.4 6.5-5.2 6.5-9.4V6L12 3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+              <span class="feature-number">01</span>
+              <h3>Privacidad primero</h3>
+              <p>La conexión entre tus dispositivos está cifrada de extremo a extremo.</p>
+              <span class="feature-link">Conexión cifrada <span aria-hidden="true">↗</span></span>
+            </article>
+            <article class="feature-card reveal">
+              <div class="feature-icon icon-lilac"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="12" rx="2"/><path d="M8 20h8m-4-3.5V20m-4-9 2.3 2.2L16 8"/></svg></div>
+              <span class="feature-number">02</span>
+              <h3>Todo se siente cerca</h3>
+              <p>Una respuesta ágil y natural para trabajar como si estuvieras frente al equipo.</p>
+              <span class="feature-link">Conexión fluida <span aria-hidden="true">↗</span></span>
+            </article>
+            <article class="feature-card reveal">
+              <div class="feature-icon icon-mint"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="12" rx="2"/><path d="M8 20h8m-4-4v4M8.5 8.5h7m-7 3h4"/><circle cx="18" cy="18" r="3.2" class="icon-fill"/><path d="m16.8 18 1 1 1.5-2"/></svg></div>
+              <span class="feature-number">03</span>
+              <h3>Empieza en segundos</h3>
+              <p>Instala DxDesk y conecta con tu espacio de trabajo de forma sencilla.</p>
+              <span class="feature-link">Sin vueltas <span aria-hidden="true">↗</span></span>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="downloads-section section-pad" id="descargas">
+        <div class="wrap">
+          <div class="download-heading reveal" id="descargas-titulo">
+            <div>
+              <div class="eyebrow eyebrow-light"><span class="eyebrow-dot"></span> Tu siguiente paso</div>
+              <h2>DxDesk, listo<br />para <span>conectar.</span></h2>
+              <p>Elige tu plataforma. Te llevamos siempre a la versión estable más reciente.</p>
+            </div>
+            <div class="release-status" id="release-status" aria-live="polite">
+              <span class="release-pulse"></span>
+              <span><strong id="release-status-title">Buscando la versión más reciente</strong><small id="release-status-detail">Consultando GitHub Releases</small></span>
+            </div>
+          </div>
+
+          <div class="detected-banner" id="platform-banner" hidden>
+            <span class="banner-icon">⌖</span>
+            <span><strong id="platform-banner-title">Plataforma detectada</strong><small>Hemos puesto tu sistema al principio. Puedes elegir cualquier otra opción.</small></span>
+            <a href="#descargas-titulo">Ver opciones <span aria-hidden="true">↑</span></a>
+          </div>
+
+          <div class="platform-grid" id="platform-grid">
+            <article class="platform-card" data-platform="windows">
+              <div class="card-topline"><span class="platform-symbol windows-mark">⊞</span><span class="recommended-tag" hidden>Tu sistema</span></div>
+              <h3>Windows</h3><p class="platform-detail">Windows 10 o posterior · 64 bits</p>
+              <div class="asset-actions">
+                <a class="asset-link asset-link-primary" data-asset="DxDesk-Windows-Setup.exe" href="https://github.com/mrryzensor/DxDesk/releases" aria-label="Descargar instalador DxDesk para Windows">Instalador <span>↓</span></a>
+                <a class="asset-link asset-link-secondary" data-asset="DxDesk-Windows-x64.exe" href="https://github.com/mrryzensor/DxDesk/releases">Versión portable <span>↓</span></a>
+              </div>
+              <div class="card-footer"><span class="release-version">Última versión</span><span>·</span><span>EXE</span></div>
+            </article>
+
+            <article class="platform-card" data-platform="macos">
+              <div class="card-topline"><span class="platform-symbol apple-mark">⌘</span><span class="recommended-tag" hidden>Tu sistema</span></div>
+              <h3>macOS</h3><p class="platform-detail">Descarga la versión de tu Mac</p>
+              <div class="asset-actions">
+                <a class="asset-link asset-link-primary" data-asset="DxDesk-macOS-AppleSilicon.dmg" href="https://github.com/mrryzensor/DxDesk/releases">Apple silicon <span>↓</span></a>
+                <a class="asset-link asset-link-secondary" data-asset="DxDesk-macOS-Intel.dmg" href="https://github.com/mrryzensor/DxDesk/releases">Intel <span>↓</span></a>
+              </div>
+              <div class="card-footer"><span class="release-version">Última versión</span><span>·</span><span>DMG</span></div>
+            </article>
+
+            <article class="platform-card" data-platform="linux">
+              <div class="card-topline"><span class="platform-symbol linux-mark">◈</span><span class="recommended-tag" hidden>Tu sistema</span></div>
+              <h3>Linux</h3><p class="platform-detail">Paquetes para distribuciones x64</p>
+              <div class="asset-actions">
+                <a class="asset-link asset-link-primary" data-asset="DxDesk-Linux-x64.AppImage" href="https://github.com/mrryzensor/DxDesk/releases">AppImage <span>↓</span></a>
+                <a class="asset-link asset-link-secondary" data-asset="DxDesk-Linux-x64.deb" href="https://github.com/mrryzensor/DxDesk/releases">Debian / Ubuntu <span>↓</span></a>
+              </div>
+              <div class="card-footer"><span class="release-version">Última versión</span><span>·</span><span>APPIMAGE · DEB</span></div>
+            </article>
+
+            <article class="platform-card" data-platform="android">
+              <div class="card-topline"><span class="platform-symbol android-mark">●</span><span class="recommended-tag" hidden>Tu sistema</span></div>
+              <h3>Android</h3><p class="platform-detail">Instalador universal o ARM64</p>
+              <div class="asset-actions">
+                <a class="asset-link asset-link-primary" data-asset="DxDesk-Android-Universal.apk" href="https://github.com/mrryzensor/DxDesk/releases">APK universal <span>↓</span></a>
+                <a class="asset-link asset-link-secondary" data-asset="DxDesk-Android-arm64.apk" href="https://github.com/mrryzensor/DxDesk/releases">APK ARM64 <span>↓</span></a>
+              </div>
+              <div class="card-footer"><span class="release-version">Última versión</span><span>·</span><span>APK</span></div>
+            </article>
+          </div>
+
+          <div class="release-footnote"><span>◇</span> Descargas oficiales alojadas en GitHub. <a href="https://github.com/mrryzensor/DxDesk/releases" target="_blank" rel="noreferrer">Ver todas las versiones <span aria-hidden="true">↗</span></a></div>
+        </div>
+      </section>
+
+      <section class="closing-section wrap reveal">
+        <div class="closing-mark"><img src="assets/icon.png" alt="" /></div>
+        <div><span class="closing-kicker">Una conexión puede cambiar tu día.</span><h2>Tu escritorio está<br class="mobile-break" /> donde lo necesitas.</h2></div>
+        <a class="button button-dark" href="#descargas">Encuentra tu descarga <span aria-hidden="true">↑</span></a>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer-inner">
+        <a class="brand footer-brand" href="#inicio"><img src="assets/icon.png" alt="" width="30" height="30" /><span>Dx<span class="brand-accent">Desk</span></span></a>
+        <span>Conecta con lo que importa.</span>
+        <div><a href="https://github.com/mrryzensor/DxDesk" target="_blank" rel="noreferrer">Código abierto <span aria-hidden="true">↗</span></a><span class="footer-divider">·</span><span>© <span id="year"></span> DxDesk</span></div>
+      </div>
+    </footer>
+  </body>
+</html>

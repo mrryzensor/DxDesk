@@ -1,6 +1,9 @@
 {
   "repository": "https://github.com/rustdesk/rustdesk.git",
-  "ref": "master",
+  "ref": "1.5.0",
+  "version": "1.5.0",
+  "release_commit": "e9ddbd8f460dac1b30b9815ba324a5dadc8d97b0",
+  "source_ref": "master",
   "commit": "a7f2260203befb7e9c70b585219f0f0b5ca57703",
   "synced_at": "2026-09-29T10:39:54.926543+00:00"
 }
