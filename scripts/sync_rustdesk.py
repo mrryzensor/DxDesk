@@ -77,7 +77,7 @@ def version_from_tag(tag: str) -> tuple[str, str] | None:
     return version, match.group(1)
 
 
-def latest_release(repository: str) -> tuple[str, str, str, str]:
+def latest_release(repository: str) -> tuple[str, str, str, str, bool]:
     parsed = urlparse(repository.removesuffix(".git"))
     parts = [part for part in parsed.path.split("/") if part]
     if parsed.netloc.lower() != "github.com" or len(parts) != 2:
@@ -98,11 +98,11 @@ def latest_release(repository: str) -> tuple[str, str, str, str]:
         tag = release.get("tag_name")
         parsed_version = version_from_tag(tag) if isinstance(tag, str) else None
         if parsed_version:
-            selected = (tag, parsed_version)
+            selected = (tag, parsed_version, bool(release.get("prerelease", False)))
             break
     if not selected:
         raise RuntimeError("No se encontró una release numerada de RustDesk")
-    tag, parsed_version = selected
+    tag, parsed_version, prerelease = selected
     version, cargo_version = parsed_version
 
     refs = run(
@@ -113,7 +113,7 @@ def latest_release(repository: str) -> tuple[str, str, str, str]:
     commit = tag_refs.get(f"refs/tags/{tag}^{{}}", tag_refs.get(f"refs/tags/{tag}"))
     if not commit:
         raise RuntimeError(f"No se pudo resolver el commit de RustDesk {tag}")
-    return tag, version, cargo_version, commit
+    return tag, version, cargo_version, commit, prerelease
 
 
 def client_version() -> str | None:
@@ -137,6 +137,7 @@ def write_release_state(
     repository: str,
     release_tag: str,
     version: str,
+    prerelease: bool,
     release_commit: str,
     source_commit: str,
     source_ref: str,
@@ -146,6 +147,7 @@ def write_release_state(
         "repository": repository,
         "ref": release_tag,
         "version": version,
+        "prerelease": prerelease,
         "release_commit": release_commit,
         "source_ref": source_ref,
         "commit": source_commit,
@@ -267,13 +269,16 @@ def main() -> int:
 
     old_state = current_state()
     if args.ref == "latest":
-        release_tag, version, cargo_release_version, release_commit = latest_release(args.repository)
+        release_tag, version, cargo_release_version, release_commit, prerelease = latest_release(
+            args.repository
+        )
     else:
         release_tag = args.ref
         parsed_version = version_from_tag(release_tag)
         if not parsed_version:
             raise ValueError(f"--ref debe ser una etiqueta de versión, no una rama: {release_tag}")
         version, cargo_release_version = parsed_version
+        prerelease = False
         refs = run(
             ["git", "ls-remote", args.repository, f"refs/tags/{release_tag}", f"refs/tags/{release_tag}^{{}}"],
             capture_output=True,
@@ -287,8 +292,10 @@ def main() -> int:
     current_version = client_version()
     known_version = old_state.get("version") or current_version
     repository_changed = old_state.get("repository", args.repository) != args.repository
+    promoted_to_official = old_state.get("prerelease") is True and not prerelease
     source_changed = (
         known_version != version
+        or promoted_to_official
         or repository_changed
         or args.force
         or current_version is None
@@ -327,6 +334,7 @@ def main() -> int:
         args.repository,
         release_tag,
         version,
+        prerelease,
         release_commit,
         source_commit,
         source_ref,

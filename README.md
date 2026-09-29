@@ -117,11 +117,11 @@ Si en algún momento actualizas `logo.png`:
 ## 🔄 Actualización automática desde RustDesk
 
 El workflow **Sync RustDesk upstream** consulta diariamente la última release
-numerada de `rustdesk/rustdesk` (omite `nightly`). Sólo cuando aparece un tag de
-versión nuevo,
-reemplaza la copia de `client/`, reaplica `branding.json` y sube un commit a
-`main`; entonces inicia las compilaciones de fuente de Windows, Android, Linux y
-macOS. Los commits diarios de `master` no disparan compilaciones.
+numerada de `rustdesk/rustdesk` (omite `nightly`). Cuando aparece un tag de
+versión nuevo o uno pasa de prerelease a oficial, reemplaza la copia de
+`client/`, reaplica `branding.json` y sube un commit a `main`; entonces inicia
+las compilaciones de fuente de Windows, Android, Linux y macOS. Los commits
+diarios de `master` no disparan compilaciones.
 
 `client/` se considera una copia vendorizada generada: cualquier cambio manual
 que no forme parte de la configuración de marca se sobrescribirá en la siguiente
