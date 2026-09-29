@@ -20,7 +20,6 @@ void handleUpdate(String releasePageUrl) {
     downloadUrl = releasePageUrl.replaceAll('tag', 'download');
     String version = downloadUrl.substring(downloadUrl.lastIndexOf('/') + 1);
     downloadFile = bind.mainGetCommonSync(key: 'download-file-$version');
-    downloadUrl = '$downloadUrl/$downloadFile';
   }
   if (downloadFile.startsWith('error:')) {
     final error = downloadFile.replaceFirst('error:', '');
@@ -28,6 +27,10 @@ void handleUpdate(String releasePageUrl) {
         releasePageUrl, gFFI.dialogManager);
     return;
   }
+  if (!bind.isCustomClient()) {
+    downloadUrl = '$downloadUrl/$downloadFile';
+  }
+
   SimpleWrapper downloadId = SimpleWrapper('');
   SimpleWrapper<VoidCallback> onCanceled = SimpleWrapper(() {});
   gFFI.dialogManager.dismissAll();

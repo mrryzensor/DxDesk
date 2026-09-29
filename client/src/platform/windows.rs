@@ -1297,9 +1297,6 @@ pub fn lock_screen() {
     }
 }
 
-// Must match client-packager/inno_setup_dxdesk.iss. Inno Setup records the
-// installed location under this uninstall key, which is how the client
-// recognizes a DxDesk installation instead of showing the Install card again.
 const IS1: &str = "{E380B41C-8D57-48BC-96E6-8E383845496B}_is1";
 
 fn get_subkey(name: &str, wow: bool) -> String {
@@ -1408,9 +1405,6 @@ fn get_default_install_path() -> String {
     if std::path::Path::new(&preferred).exists() {
         return preferred;
     }
-    // A previous 32-bit DxDesk installer may have used Program Files (x86)
-    // even when the current client is 64-bit. Reuse that existing location
-    // so the old rustdesk.exe/DxDesk.exe installation remains discoverable.
     if let Ok(pf32) = std::env::var("ProgramFiles(x86)") {
         let legacy = format!("{}\\{}", pf32, crate::get_app_name());
         if std::path::Path::new(&legacy).exists() {
@@ -1476,9 +1470,8 @@ fn get_install_info_with_subkey(subkey: String) -> (String, String, String, Stri
         crate::get_app_name()
     );
     let exe = format!("{}\\{}.exe", path, crate::get_app_name());
-    // Older DxDesk installers shipped the embedded Flutter executable as
-    // rustdesk.exe. Keep those installations detectable and usable while all
-    // new installers consistently ship DxDesk.exe.
+    // Older branded installers used rustdesk.exe. Keep them detectable while
+    // new packages consistently use DxDesk.exe.
     let exe = if !std::path::Path::new(&exe).exists() && crate::is_custom_client() {
         let legacy_exe = format!("{}\\rustdesk.exe", path);
         if std::path::Path::new(&legacy_exe).exists() {
