@@ -83,12 +83,17 @@ def latest_release(repository: str) -> tuple[str, str, str, str, bool]:
     if parsed.netloc.lower() != "github.com" or len(parts) != 2:
         raise ValueError(f"No se puede consultar releases para este repositorio: {repository}")
 
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "DxDesk-upstream-sync",
+    }
+    github_token = os.environ.get("RUSTDESK_GITHUB_TOKEN")
+    if github_token:
+        headers["Authorization"] = f"Bearer {github_token}"
+
     request = Request(
         f"https://api.github.com/repos/{parts[0]}/{parts[1]}/releases?per_page=100",
-        headers={
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "DxDesk-upstream-sync",
-        },
+        headers=headers,
     )
     with urlopen(request, timeout=30) as response:
         releases = json.load(response)

@@ -36,6 +36,8 @@ jobs:
 
       - name: Sync and brand RustDesk source
         id: sync
+        env:
+          RUSTDESK_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: python scripts/sync_rustdesk.py
 
       - name: Commit upstream update
