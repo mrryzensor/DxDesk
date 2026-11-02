@@ -2,9 +2,9 @@
   "repository": "https://github.com/rustdesk/rustdesk.git",
   "ref": "1.5.1",
   "version": "1.5.1",
-  "prerelease": true,
-  "release_commit": "e1ca09766cc97eaaba5e350114431189b109be7d",
+  "prerelease": false,
+  "release_commit": "23e5bb471a040d62f0a6ad52591fb30784265b73",
   "source_ref": "1.5.1",
-  "commit": "e1ca09766cc97eaaba5e350114431189b109be7d",
-  "synced_at": "2026-10-30T10:50:54.681348+00:00"
+  "commit": "23e5bb471a040d62f0a6ad52591fb30784265b73",
+  "synced_at": "2026-11-02T12:20:28.353616+00:00"
 }
